@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { Document, InboxMessage, Article, Appointment, Availability, TeamMember, NLPAnalysis } from '../types';
+import { analyzeLegalProblem, type AIProgress, type LegalAnalysisResult } from '../ai';
+import { Document, InboxMessage, Article, Appointment, Availability, TeamMember } from '../types';
 
 interface DocumentState {
   documents: Document[];
@@ -235,10 +236,16 @@ export const useTeamStore = create<TeamState>((set) => ({
 }));
 
 interface NLPState {
-  result: NLPAnalysis | null;
+  result: LegalAnalysisResult | null;
   isLoading: boolean;
   error: string | null;
+  /** Real AI pipeline progress while an analysis is running. */
+  progress: AIProgress | null;
   analyze: (query: string) => Promise<void>;
+  setResult: (result: LegalAnalysisResult | null) => void;
+  setLoading: (isLoading: boolean) => void;
+  setError: (error: string | null) => void;
+  setProgress: (progress: AIProgress | null) => void;
   clearResult: () => void;
 }
 
@@ -246,21 +253,28 @@ export const useNLPStore = create<NLPState>((set) => ({
   result: null,
   isLoading: false,
   error: null,
+  progress: null,
   analyze: async (query) => {
-    set({ isLoading: true, error: null });
+    set({ isLoading: true, error: null, progress: null });
     try {
-      const res = await fetch('/api/nlp/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
+      // OpenRouter first, then MSW mock data, then a local heuristic fallback.
+      const result = await analyzeLegalProblem(query, {
+        onProgress: progress => set({ progress }),
       });
-      const data = await res.json();
-      set({ result: data, isLoading: false });
-    } catch {
-      set({ error: 'Analysis failed', isLoading: false });
+      set({ result, isLoading: false, progress: null });
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Analysis failed',
+        isLoading: false,
+        progress: null,
+      });
     }
   },
-  clearResult: () => set({ result: null }),
+  setResult: (result) => set({ result, isLoading: false, error: null, progress: null }),
+  setLoading: (isLoading) => set({ isLoading, progress: null }),
+  setError: (error) => set({ error, isLoading: false, progress: null }),
+  setProgress: (progress) => set({ progress }),
+  clearResult: () => set({ result: null, error: null, progress: null }),
 }));
 
 interface UIState {

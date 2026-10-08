@@ -1,215 +1,54 @@
 import { User, Case, Document, InboxMessage, Article, Appointment, Availability, TeamMember } from '../types';
 
+/*
+ * FRESH-INSTALL DATASET
+ *
+ * The app ships EMPTY on purpose: a brand-new firm has no cases, documents,
+ * inbox threads, knowledge-base articles, appointments or office hours, and no
+ * staff accounts — the user sees a system with nothing in it yet.
+ *
+ * Only the system administrator is provisioned, because the admin is the one who
+ * builds the rest of the firm from inside the app:
+ *
+ *   staff   → Team Management (/admin/team) creates the attorney / secretary
+ *             AND their sign-in account (default password `password123`, see
+ *             handlers/team.ts; the member can change it in Settings)
+ *   clients → self sign-up (/signup → POST /api/auth/register)
+ *   cases, documents, articles, appointments, office hours → created by the
+ *             roles that own them, through the normal screens
+ *
+ * Everything is held in memory by MSW, so a page reload returns to this empty
+ * state. Nothing here is a placeholder person: a seeded name would show up in a
+ * picker or a list, which is exactly what this dataset must not do.
+ */
+
+/** The single account that exists on a fresh install. */
+export const ADMIN_EMAIL = 'admin@firm.com';
+export const ADMIN_PASSWORD = 'password123';
+
 export const users: (User & { password: string })[] = [
-  { id: 1, name: 'Admin User', email: 'admin@firm.com', role: 'system_admin', password: 'password123', phone: '(555) 100-0001', createdAt: '2024-01-15' },
-  { id: 2, name: 'John Smith', email: 'john@firm.com', role: 'attorney', password: 'password123', phone: '(555) 200-0002', specialization: 'Patent Law & Criminal Defense', barNumber: 'BAR-2024-0042', createdAt: '2024-02-01' },
-  { id: 3, name: 'Michael Chen', email: 'michael@firm.com', role: 'attorney', password: 'password123', phone: '(555) 200-0003', specialization: 'Probate & Personal Injury', barNumber: 'BAR-2023-0178', createdAt: '2024-03-01' },
-  { id: 4, name: 'Sarah Lee', email: 'sarah@firm.com', role: 'legal_secretary', password: 'password123', phone: '(555) 300-0004', createdAt: '2024-04-15' },
-  { id: 5, name: 'Client A', email: 'clientA@email.com', role: 'user', password: 'password123', phone: '(555) 400-0005', createdAt: '2025-01-10' },
-  { id: 6, name: 'Client B', email: 'clientB@email.com', role: 'user', password: 'password123', phone: '(555) 400-0006', createdAt: '2025-06-20' },
+  { id: 1, name: 'Admin User', email: ADMIN_EMAIL, role: 'system_admin', password: ADMIN_PASSWORD, phone: '(555) 100-0001', createdAt: '2024-01-15' },
 ];
 
-export const cases: Case[] = [
-  {
-    id: 1, title: 'Terraform Industries v. GreenVolt Corp', caseNumber: '2026-CV-04821',
-    type: 'Patent Infringement', status: 'active', priority: 'high',
-    assignedToId: 2, assignedToName: 'John Smith', clientId: 5, clientName: 'Client A',
-    description: 'Patent infringement claim involving proprietary solar cell technology. Terraform alleges GreenVolt has incorporated patented photovoltaic conversion methods in their latest product line without licensing.',
-    createdAt: '2026-03-15', updatedAt: '2026-09-10', nextHearing: '2026-10-05',
-    notes: 'Key prior art review completed. Expert witness retained.',
-  },
-  {
-    id: 2, title: 'State v. Marcus Blackwell', caseNumber: '2025-CR-08934',
-    type: 'Criminal Defense', status: 'active', priority: 'high',
-    assignedToId: 2, assignedToName: 'John Smith', clientId: 5, clientName: 'Client A',
-    description: 'Criminal defense case involving allegations of financial fraud. Defense strategy focuses on insufficient evidence and procedural errors in investigation.',
-    createdAt: '2025-11-20', updatedAt: '2026-09-08', nextHearing: '2026-09-28',
-    notes: 'Motion to suppress filed. Awaiting ruling.',
-  },
-  {
-    id: 3, title: 'Estate of Williams – Probate', caseNumber: '2026-CV-03197',
-    type: 'Probate', status: 'pending', priority: 'medium',
-    assignedToId: 3, assignedToName: 'Michael Chen', clientId: 6, clientName: 'Client B',
-    description: 'Probate administration for the Williams estate. Contested will with multiple beneficiaries disputing asset distribution.',
-    createdAt: '2026-02-10', updatedAt: '2026-09-05', nextHearing: '2026-11-12',
-    notes: 'Awaiting appraisal of real property assets.',
-  },
-  {
-    id: 4, title: 'Nakamura v. Bay Area Transit', caseNumber: '2026-CV-05590',
-    type: 'Personal Injury', status: 'discovery', priority: 'medium',
-    assignedToId: 3, assignedToName: 'Michael Chen', clientId: 6, clientName: 'Client B',
-    description: 'Personal injury claim arising from public transit accident. Client sustained injuries due to sudden brake application.',
-    createdAt: '2026-05-08', updatedAt: '2026-09-12', nextHearing: '2026-12-03',
-    notes: 'Medical records subpoenaed. Depositions scheduled.',
-  },
-  {
-    id: 5, title: 'Solaris Media Group – IP Dispute', caseNumber: '2024-CV-12001',
-    type: 'Intellectual Property', status: 'closed', priority: 'low',
-    assignedToId: 2, assignedToName: 'John Smith', clientId: 5, clientName: 'Client A',
-    description: 'Intellectual property dispute resolved through mediation. Licensing agreement reached between parties.',
-    createdAt: '2024-09-01', updatedAt: '2025-06-15',
-    notes: 'Case closed. Settlement agreement executed.',
-  },
-];
+/** Opened by the admin/secretary once attorneys and clients exist. */
+export const cases: Case[] = [];
 
-export const documents: Document[] = [
-  { id: 1, name: 'Patent_Filing_2026.pdf', type: 'PDF', size: '2.4 MB', caseId: 1, caseName: 'Terraform v. GreenVolt', uploadedBy: 2, uploadedByName: 'John Smith', uploadedAt: '2026-03-20', category: 'Filing' },
-  { id: 2, name: 'Expert_Witness_Report.pdf', type: 'PDF', size: '5.1 MB', caseId: 1, caseName: 'Terraform v. GreenVolt', uploadedBy: 2, uploadedByName: 'John Smith', uploadedAt: '2026-07-14', category: 'Evidence' },
-  { id: 3, name: 'Motion_to_Suppress.docx', type: 'DOCX', size: '1.2 MB', caseId: 2, caseName: 'State v. Blackwell', uploadedBy: 2, uploadedByName: 'John Smith', uploadedAt: '2026-08-05', category: 'Motion' },
-  { id: 4, name: 'Financial_Records.xlsx', type: 'XLSX', size: '3.8 MB', caseId: 2, caseName: 'State v. Blackwell', uploadedBy: 4, uploadedByName: 'Sarah Lee', uploadedAt: '2026-06-22', category: 'Evidence' },
-  { id: 5, name: 'Will_Original_Scan.pdf', type: 'PDF', size: '1.7 MB', caseId: 3, caseName: 'Estate of Williams', uploadedBy: 3, uploadedByName: 'Michael Chen', uploadedAt: '2026-02-15', category: 'Filing' },
-  { id: 6, name: 'Property_Appraisal.pdf', type: 'PDF', size: '4.2 MB', caseId: 3, caseName: 'Estate of Williams', uploadedBy: 4, uploadedByName: 'Sarah Lee', uploadedAt: '2026-08-20', category: 'Evidence' },
-  { id: 7, name: 'Medical_Records_Nakamura.pdf', type: 'PDF', size: '8.3 MB', caseId: 4, caseName: 'Nakamura v. BAT', uploadedBy: 3, uploadedByName: 'Michael Chen', uploadedAt: '2026-07-01', category: 'Evidence' },
-  { id: 8, name: 'Accident_Report.pdf', type: 'PDF', size: '0.9 MB', caseId: 4, caseName: 'Nakamura v. BAT', uploadedBy: 4, uploadedByName: 'Sarah Lee', uploadedAt: '2026-05-12', category: 'Evidence' },
-  { id: 9, name: 'Settlement_Agreement.pdf', type: 'PDF', size: '2.1 MB', caseId: 5, caseName: 'Solaris IP Dispute', uploadedBy: 2, uploadedByName: 'John Smith', uploadedAt: '2025-06-10', category: 'Agreement' },
-  { id: 10, name: 'IP_Licensing_Terms.docx', type: 'DOCX', size: '1.5 MB', caseId: 5, caseName: 'Solaris IP Dispute', uploadedBy: 2, uploadedByName: 'John Smith', uploadedAt: '2025-05-28', category: 'Agreement' },
-];
+/** Uploaded against a case. */
+export const documents: Document[] = [];
 
-export const inboxMessages: InboxMessage[] = [
-  {
-    id: 1, from: 'Judge Harrison', fromEmail: 'harrison@court.gov', to: 'John Smith', toEmail: 'john@firm.com',
-    subject: 'Terraform v. GreenVolt – Hearing Rescheduled', body: 'Dear Counsel,\n\nPlease be advised that the hearing originally scheduled for September 25 has been rescheduled to October 5, 2026 at 10:00 AM in Courtroom 4B.\n\nRegards,\nJudge Harrison',
-    date: '2026-09-10', read: false, starred: true, userId: 2,
-  },
-  {
-    id: 2, from: 'Client A', fromEmail: 'clientA@email.com', to: 'John Smith', toEmail: 'john@firm.com',
-    subject: 'Question about case progress', body: 'Hi John,\n\nI wanted to check in about the Terraform case. Any updates on the expert witness report?\n\nThank you,\nClient A',
-    date: '2026-09-09', read: true, starred: false, userId: 2,
-  },
-  {
-    id: 3, from: 'Opposing Counsel', fromEmail: 'davis@lawfirm.com', to: 'Michael Chen', toEmail: 'michael@firm.com',
-    subject: 'Estate of Williams – Settlement Proposal', body: 'Dear Mr. Chen,\n\nWe would like to propose mediation for the Williams estate dispute. Our clients are open to negotiation.\n\nBest regards,\nR. Davis',
-    date: '2026-09-08', read: false, starred: false, userId: 3,
-  },
-  {
-    id: 4, from: 'Bay Area Transit Legal', fromEmail: 'legal@bayareatransit.com', to: 'Michael Chen', toEmail: 'michael@firm.com',
-    subject: 'Nakamura – Discovery Response', body: 'Dear Mr. Chen,\n\nPlease find attached our responses to your discovery requests dated August 15, 2026.\n\nRegards,\nBAT Legal Team',
-    date: '2026-09-07', read: true, starred: true, userId: 3,
-  },
-  {
-    id: 5, from: 'Admin User', fromEmail: 'admin@firm.com', to: 'All Staff', toEmail: 'all@firm.com',
-    subject: 'Office Meeting – Friday', body: 'Team,\n\nReminder that we have our monthly office meeting this Friday at 3:00 PM in the conference room.\n\nBest,\nAdmin',
-    date: '2026-09-06', read: true, starred: false, userId: 1,
-  },
-  {
-    id: 6, from: 'John Smith', fromEmail: 'john@firm.com', to: 'Client A', toEmail: 'clientA@email.com',
-    subject: 'RE: Case Update – Terraform', body: 'Dear Client A,\n\nI wanted to update you on the progress. The expert witness report has been finalized and filed. We are well-prepared for the October hearing.\n\nBest regards,\nJohn Smith, Esq.',
-    date: '2026-09-10', read: false, starred: false, userId: 5,
-  },
-];
+/** Written by staff and clients as they communicate. */
+export const inboxMessages: InboxMessage[] = [];
 
-export const articles: Article[] = [
-  {
-    id: 1,
-    title: 'Assault and Battery – Legal Guide',
-    category: 'Criminal Law',
-    keywords: ['assault', 'battery', 'physical harm', 'hit', 'punch', 'attack', 'violence'],
-    summary: 'Comprehensive guide explaining what constitutes assault and battery under criminal law, including potential defenses and penalties.',
-    content: 'Assault is defined as an intentional act that causes another person to fear imminent harmful or offensive contact. Battery goes further—it involves the actual harmful or offensive touching of another person without consent.\n\n## Key Elements of Assault\n- Intent to cause fear of harm\n- Reasonable apprehension of imminent contact\n- No actual physical contact required\n\n## Key Elements of Battery\n- Intentional harmful or offensive contact\n- Contact without consent\n- Actual physical touching occurred\n\n## Potential Penalties\n- Misdemeanor: Up to 1 year in jail, fines up to $5,000\n- Felony (aggravated): 2-10 years imprisonment\n\n## Common Defenses\n- Self-defense\n- Defense of others\n- Consent\n- Lack of intent',
-    attorneySpecialist: 'James Rodriguez, Esq.',
-    servicesNeeded: ['Legal Consultation', 'Criminal Case Filing', 'Court Representation'],
-    status: 'published',
-    matchCount: 45,
-    createdAt: '2025-06-01',
-    updatedAt: '2026-03-15',
-  },
-  {
-    id: 2,
-    title: 'What to Do If You\'ve Been Assaulted',
-    category: 'Criminal Law',
-    keywords: ['assault', 'victim', 'report', 'police', 'attacked', 'hurt'],
-    summary: 'Step-by-step guide on what to do immediately after being assaulted, including reporting, medical care, and legal options.',
-    content: 'If you have been assaulted, your safety is the top priority. Here is what you should do:\n\n## Immediate Steps\n1. Get to a safe location\n2. Call 911 if in immediate danger\n3. Seek medical attention\n4. Document your injuries with photos\n\n## Reporting\n1. File a police report as soon as possible\n2. Get the report number for your records\n3. Provide all details you can remember\n\n## Legal Options\n- File criminal charges through the prosecutor\n- Pursue a civil lawsuit for damages\n- Obtain a restraining order\n\n## Evidence to Preserve\n- Medical records and bills\n- Photos of injuries\n- Witness contact information\n- Any communication from the attacker',
-    attorneySpecialist: 'James Rodriguez, Esq.',
-    servicesNeeded: ['Legal Consultation', 'Evidence Collection', 'Protective Order Filing'],
-    status: 'published',
-    matchCount: 32,
-    createdAt: '2025-06-15',
-    updatedAt: '2026-02-20',
-  },
-  {
-    id: 3,
-    title: 'Understanding Patent Infringement',
-    category: 'Intellectual Property',
-    keywords: ['patent', 'infringement', 'intellectual property', 'invention', 'copyright', 'trademark'],
-    summary: 'An overview of patent infringement claims, how to identify them, and what legal remedies are available.',
-    content: 'Patent infringement occurs when someone makes, uses, sells, or imports a patented invention without the patent holder\'s permission.\n\n## Types of Patent Infringement\n- **Direct Infringement**: Making or selling the patented product\n- **Indirect Infringement**: Encouraging or contributing to infringement\n- **Willful Infringement**: Knowingly infringing on a patent\n\n## Remedies Available\n- Injunctive relief (court order to stop infringement)\n- Monetary damages (lost profits or reasonable royalties)\n- Enhanced damages for willful infringement\n\n## Defenses\n- Invalidity of the patent\n- Non-infringement\n- Prior art\n- Experimental use',
-    attorneySpecialist: 'John Smith, Esq.',
-    servicesNeeded: ['Patent Analysis', 'Legal Consultation', 'Litigation Support'],
-    status: 'published',
-    matchCount: 28,
-    createdAt: '2025-08-01',
-    updatedAt: '2026-04-10',
-  },
-  {
-    id: 4,
-    title: 'Personal Injury Claims – Your Rights',
-    category: 'Personal Injury',
-    keywords: ['injury', 'accident', 'compensation', 'negligence', 'slip', 'fall', 'car accident', 'hurt'],
-    summary: 'Essential information about personal injury claims, including types of cases, compensation, and statute of limitations.',
-    content: 'Personal injury law covers situations where you\'ve been hurt due to someone else\'s negligence or intentional actions.\n\n## Common Types of Cases\n- Auto accidents\n- Slip and fall\n- Medical malpractice\n- Product liability\n- Workplace injuries\n\n## Compensation Types\n- Medical expenses\n- Lost wages\n- Pain and suffering\n- Property damage\n- Emotional distress\n\n## Steps to Take\n1. Seek immediate medical attention\n2. Document the scene and injuries\n3. Collect witness information\n4. Contact a personal injury attorney\n5. Do not give statements to insurance companies',
-    attorneySpecialist: 'Michael Chen, Esq.',
-    servicesNeeded: ['Legal Consultation', 'Case Evaluation', 'Insurance Negotiation'],
-    status: 'published',
-    matchCount: 56,
-    createdAt: '2025-05-10',
-    updatedAt: '2026-01-30',
-  },
-  {
-    id: 5,
-    title: 'Probate and Estate Administration',
-    category: 'Estate Law',
-    keywords: ['probate', 'estate', 'will', 'inheritance', 'trust', 'executor', 'beneficiary', 'death'],
-    summary: 'Guide to navigating the probate process, including executor duties, timeline, and common disputes.',
-    content: 'Probate is the legal process of administering a deceased person\'s estate. This includes validating their will, paying debts, and distributing assets.\n\n## The Probate Process\n1. Filing the will with the probate court\n2. Appointing an executor or administrator\n3. Inventorying assets\n4. Paying debts and taxes\n5. Distributing remaining assets\n\n## Executor Responsibilities\n- Manage estate assets\n- Notify creditors\n- File tax returns\n- Distribute assets per the will\n\n## Common Disputes\n- Will contests\n- Beneficiary disagreements\n- Executor misconduct\n- Hidden assets',
-    attorneySpecialist: 'Michael Chen, Esq.',
-    servicesNeeded: ['Estate Planning', 'Probate Filing', 'Legal Consultation'],
-    status: 'published',
-    matchCount: 38,
-    createdAt: '2025-07-20',
-    updatedAt: '2026-05-05',
-  },
-  {
-    id: 6,
-    title: 'Criminal Defense – Know Your Rights',
-    category: 'Criminal Law',
-    keywords: ['criminal', 'defense', 'arrest', 'rights', 'miranda', 'lawyer', 'charges', 'court'],
-    summary: 'Essential guide to understanding your rights when facing criminal charges, from arrest through trial.',
-    content: 'If you are facing criminal charges, understanding your rights is critical.\n\n## Your Constitutional Rights\n- Right to remain silent\n- Right to an attorney\n- Right to a fair trial\n- Right against unreasonable search and seizure\n- Right to confront witnesses\n\n## After an Arrest\n1. Exercise your right to remain silent\n2. Request an attorney immediately\n3. Do not consent to searches\n4. Document everything you remember\n\n## The Criminal Process\n1. Arrest and booking\n2. Initial appearance/bail hearing\n3. Preliminary hearing/grand jury\n4. Arraignment\n5. Pre-trial motions\n6. Trial\n7. Sentencing (if convicted)',
-    attorneySpecialist: 'John Smith, Esq.',
-    servicesNeeded: ['Criminal Defense Consultation', 'Bail Hearing', 'Trial Representation'],
-    status: 'published',
-    matchCount: 62,
-    createdAt: '2025-04-01',
-    updatedAt: '2026-06-18',
-  },
-];
+/** Written by the admin in the knowledge base. */
+export const articles: Article[] = [];
 
-export const appointments: Appointment[] = [
-  { id: 1, title: 'Terraform Case Review', clientId: 5, clientName: 'Client A', attorneyId: 2, attorneyName: 'John Smith', date: '2026-09-20', time: '10:00', duration: 60, type: 'meeting', status: 'scheduled', notes: 'Review expert witness report', location: 'Conference Room A' },
-  { id: 2, title: 'Blackwell Case Prep', clientId: 5, clientName: 'Client A', attorneyId: 2, attorneyName: 'John Smith', date: '2026-09-22', time: '14:00', duration: 90, type: 'consultation', status: 'scheduled', notes: 'Prepare for motion hearing', location: 'Office 201' },
-  { id: 3, title: 'Williams Estate Meeting', clientId: 6, clientName: 'Client B', attorneyId: 3, attorneyName: 'Michael Chen', date: '2026-09-25', time: '11:00', duration: 60, type: 'meeting', status: 'scheduled', notes: 'Discuss settlement proposal', location: 'Conference Room B' },
-  { id: 4, title: 'Nakamura Deposition Prep', clientId: 6, clientName: 'Client B', attorneyId: 3, attorneyName: 'Michael Chen', date: '2026-09-27', time: '09:00', duration: 120, type: 'deposition', status: 'scheduled', notes: 'Prepare client for deposition', location: 'Conference Room A' },
-  { id: 5, title: 'Initial Consultation – New Client', clientId: 5, clientName: 'Client A', attorneyId: 2, attorneyName: 'John Smith', date: '2026-08-15', time: '10:00', duration: 45, type: 'consultation', status: 'completed', notes: 'Completed initial review', location: 'Office 201' },
-  { id: 6, title: 'Probate Hearing Prep', clientId: 6, clientName: 'Client B', attorneyId: 3, attorneyName: 'Michael Chen', date: '2026-08-28', time: '15:00', duration: 60, type: 'hearing', status: 'completed', notes: 'Hearing preparation completed', location: 'Conference Room B' },
-];
+/** Booked from the availability each attorney publishes. */
+export const appointments: Appointment[] = [];
 
-export const availability: Availability[] = [
-  { id: 1, attorneyId: 2, attorneyName: 'John Smith', dayOfWeek: 'Monday', startTime: '09:00', endTime: '17:00', isAvailable: true },
-  { id: 2, attorneyId: 2, attorneyName: 'John Smith', dayOfWeek: 'Tuesday', startTime: '09:00', endTime: '17:00', isAvailable: true },
-  { id: 3, attorneyId: 2, attorneyName: 'John Smith', dayOfWeek: 'Wednesday', startTime: '09:00', endTime: '12:00', isAvailable: true },
-  { id: 4, attorneyId: 2, attorneyName: 'John Smith', dayOfWeek: 'Thursday', startTime: '09:00', endTime: '17:00', isAvailable: true },
-  { id: 5, attorneyId: 2, attorneyName: 'John Smith', dayOfWeek: 'Friday', startTime: '09:00', endTime: '15:00', isAvailable: true },
-  { id: 6, attorneyId: 3, attorneyName: 'Michael Chen', dayOfWeek: 'Monday', startTime: '10:00', endTime: '18:00', isAvailable: true },
-  { id: 7, attorneyId: 3, attorneyName: 'Michael Chen', dayOfWeek: 'Tuesday', startTime: '10:00', endTime: '18:00', isAvailable: true },
-  { id: 8, attorneyId: 3, attorneyName: 'Michael Chen', dayOfWeek: 'Wednesday', startTime: '10:00', endTime: '18:00', isAvailable: true },
-  { id: 9, attorneyId: 3, attorneyName: 'Michael Chen', dayOfWeek: 'Thursday', startTime: '10:00', endTime: '14:00', isAvailable: true },
-  { id: 10, attorneyId: 3, attorneyName: 'Michael Chen', dayOfWeek: 'Friday', startTime: '10:00', endTime: '16:00', isAvailable: true },
-];
+/** Office hours, published by each attorney. */
+export const availability: Availability[] = [];
 
+/** The firm directory (staff only) — the admin is the one seeded row. */
 export const teamMembers: TeamMember[] = [
-  { id: 1, name: 'Admin User', email: 'admin@firm.com', role: 'system_admin', phone: '(555) 100-0001', department: 'Administration', joinDate: '2024-01-15', status: 'active' },
-  { id: 2, name: 'John Smith', email: 'john@firm.com', role: 'attorney', phone: '(555) 200-0002', department: 'Litigation', joinDate: '2024-02-01', status: 'active', specialization: 'Patent Law & Criminal Defense' },
-  { id: 3, name: 'Michael Chen', email: 'michael@firm.com', role: 'attorney', phone: '(555) 200-0003', department: 'Litigation', joinDate: '2024-03-01', status: 'active', specialization: 'Probate & Personal Injury' },
-  { id: 4, name: 'Sarah Lee', email: 'sarah@firm.com', role: 'legal_secretary', phone: '(555) 300-0004', department: 'Support', joinDate: '2024-04-15', status: 'active' },
+  { id: 1, name: 'Admin User', email: ADMIN_EMAIL, role: 'system_admin', phone: '(555) 100-0001', department: 'Administration', joinDate: '2024-01-15', status: 'active' },
 ];

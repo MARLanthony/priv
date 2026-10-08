@@ -1,0 +1,530 @@
+╔══════════════════════════════════════════════════════════════════════════╗
+║                    JurisFlow — SYSTEM BLOCK DIAGRAM                      ║
+║            Frontend-only React application · MSW mock API                ║
+║                                                                          ║
+║  Project name: JurisFlow  (this project was renamed from "LegalFlow";    ║
+║  see §6.3 for the two other places the original brief differs from the   ║
+║  code as it exists today).                                               ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  1. SYSTEM ARCHITECTURE  (FRONTEND ONLY)                                 ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  BROWSER  —  everything runs here                                    │
+  │                                                                      │
+  │   ┌────────────────────────────────────────────────────────────┐     │
+  │   │  React 19 + TypeScript            Vite dev server  :5173   │     │
+  │   │  ────────────────────────────────────────────────────────  │     │
+  │   │  pages/            route screens per role                  │     │
+  │   │  components/       layout, sidebar, auth split-card, modal │     │
+  │   │  stores/           Zustand: auth, cases, docs, inbox, ...  │     │
+  │   │  ai/               OpenRouter client + NLP service         │     │
+  │   └───────────┬────────────────────────────────────┬───────────┘     │
+  │               │ fetch('/api/...')                  │ fetch(...)      │
+  │               │ (app data)                         │ (AI)            │
+  │               ▼                                    │                 │
+  │   ┌───────────────────────────────┐                │                 │
+  │   │  MSW SERVICE WORKER           │                │                 │
+  │   │  intercepts every /api/* call │                │                 │
+  │   │  before it reaches the network│                │                 │
+  │   │  src/mocks/browser.ts         │                │                 │
+  │   └──────────────┬────────────────┘                │                 │
+  │                  ▼                                 │                 │
+  │   ┌───────────────────────────────┐                │                 │
+  │   │  MOCK DATA (in-browser)       │                │                 │
+  │   │  src/mocks/data.ts            │                │                 │
+  │   │  users · cases · documents    │                │                 │
+  │   │  inboxMessages · articles     │                │                 │
+  │   │  appointments · availability  │                │                 │
+  │   │  teamMembers                  │                │                 │
+  │   └───────────────────────────────┘                │                 │
+  └────────────────────────────────────────────────────┼─────────────────┘
+                                                       ▼
+                                     ┌────────────────────────────────┐
+                                     │  AI SERVICE — OpenRouter       │
+                                     │  https://openrouter.ai/api/v1  │
+                                     │  called DIRECTLY from the      │
+                                     │  browser (no proxy, no server) │
+                                     └────────────────────────────────┘
+
+  REQUEST ROUTING
+  ┌────────────────────────────┬──────────────────────────────────────────┐
+  │  App data  /api/cases …    │  → MSW (in-browser mock)                 │
+  │  NLP       /api/nlp/analyze│  → MSW, but only as a FALLBACK (see §2)  │
+  │  AI        openrouter.ai   │  → real network call from the browser    │
+  └────────────────────────────┴──────────────────────────────────────────┘
+
+  NOT PRESENT: no server process, no database, no cloud API for app data.
+
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  2. NLP SUGGESTION ENGINE — ALGORITHM FLOW                               ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+  The four steps requested in the brief, mapped to the real code path:
+
+    BRIEF                        ACTUAL IMPLEMENTATION
+    ─────────────────────────    ─────────────────────────────────────────────
+    Step 1  User types problem   pages/user/GetSuggestionsPage.tsx textarea
+    Step 2  POST /api/nlp/analyze analyzeLegalProblem() in
+                                 src/ai/services/nlpService.ts — which tries
+                                 OpenRouter FIRST, not MSW
+    Step 3  MSW mocks or calls   MSW is the 3rd of 4 levels, not the entry
+            OpenRouter           point: /api/nlp/analyze is replayed only
+                                 when OpenRouter fails or is unavailable
+    Step 4  Response displayed   pages/user/SuggestionsResultsPage.tsx
+
+  RESOLUTION ORDER (this is the important part — the brief has 2 and 3 swapped)
+
+  ┌─────┬──────────────────────────────────────────────┬───────────────────┐
+  │  1  │ Cached result for an identical description   │ instant           │
+  │  2  │ OPENROUTER  (real model, legal-intake prompt)│ live AI analysis  │
+  │  3  │ MSW  POST /api/nlp/analyze  (keyword match)  │ offline fallback  │
+  │  4  │ Local heuristic keyword scan (no network)    │ last resort       │
+  └─────┴──────────────────────────────────────────────┴───────────────────┘
+
+  FULL FLOW
+  ─────────
+
+  ┌──────────────┐
+  │  STEP 1      │  User types: "I was assaulted at a bar last night…"
+  │  User input  │  GetSuggestionsPage.tsx  (textarea + submit)
+  └──────┬───────┘
+         ▼
+  ┌──────────────────────────────┐
+  │  STEP 2                      │  analyzeLegalProblem(query, { onProgress })
+  │  Frontend builds the request │  · cache lookup  (mock:<query> / live:<query>)
+  └──────┬───────────────────────┘  · buildLegalIntakeUserPrompt() + system prompt
+         ▼
+  ┌──────────────────────────────┐   stage: "preparing"
+  │  STEP 3                      │   isOpenRouterConfigured() ?
+  │  AI call — OpenRouter        │        │
+  │  (browser → openrouter.ai)   │        ├── yes ──▶ POST /chat/completions
+  └──────┬───────────────────────┘        │            model chain (§6.2)
+         │                                │            response_format=json_object
+         │                                │            reasoning on for PRIMARY
+         │                                └── no ───▶ jump to STEP 3b
+         ▼                                              stage: "requesting"
+  ┌──────────────────────────────┐
+  │  STEP 4                      │   · 60 s per attempt, 1 retry per model,
+  │  AI responds                 │     120 s whole chain
+  │  (JSON analysis text)        │   · 3 models tried in order
+  └──────┬───────────────────────┘   · 429/5xx → next model automatically
+         ▼                                              stage: "received"
+  ┌──────────────────────────────┐
+  │  STEP 5                      │   extractJson → parseJsonResponse (tolerant:
+  │  Parse + normalise           │   fences, trailing commas) → normalizeLegalAnalysis
+  │  (in the browser)            │   → clampConfidence · normalizeUrgency
+  └──────┬───────────────────────┘                   stage: "parsing"
+         ▼
+  ┌──────────────────────────────┐
+  │  STEP 6                      │   GET /api/knowledge/articles  (MSW)
+  │  Enrich with mock data       │   GET /api/availability        (MSW)
+  │                              │   → matched articles, recommended attorney,
+  │                              │     available appointment slots
+  └──────┬───────────────────────┘                  stage: "enriching"
+         ▼
+  ┌──────────────────────────────┐
+  │  STEP 7                      │   NLPAnalysis {
+  │  Return to the frontend      │     query, extractedKeywords, suggestedCaseType,
+  │                              │     confidence, matchedArticles, urgency,
+  │  (source: openrouter |       │     recommendedAttorney, requiredServices,
+  │   msw | fallback)            │     nextSteps, source }
+  └──────┬───────────────────────┘                       stage: "done"
+         ▼
+  ┌──────────────────────────────┐
+  │  STEP 8                      │   SuggestionsResultsPage.tsx
+  │  Display to the user         │   + AIProcessingModal shows live progress
+  └──────────────────────────────┘
+
+  FAILURE PATH
+  ────────────
+      OpenRouter error / timeout / no API key
+              │
+              ▼
+      ┌───────────────────────────┐  POST /api/nlp/analyze → nlpHandlers
+      │  STEP 3b  MSW fallback    │  · keywords matched against articles[]
+      │  src/mocks/handlers/nlp.ts│  · confidence = 40 + matchScore × 20 (max 95)
+      └──────────┬────────────────┘  · attorney = article.attorneySpecialist
+                 ▼                          stage: "fallback"
+      ┌───────────────────────────┐
+      │  STEP 3c  Local heuristic │  inferCaseType() keyword table +
+      │  (no network at all)      │  inferUrgency() hard triggers
+      └───────────────────────────┘
+
+  PROGRESS STAGES EMITTED (shown in the AI processing modal)
+  preparing ▶ requesting ▶ received ▶ parsing ▶ enriching ▶ done
+                                           (fallback ▶)  when AI is unavailable
+
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  3. THE FOUR USER ROLES AND THEIR PERMISSIONS                            ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+  SESSION: log in → token + user in localStorage → every role area is wrapped
+  in <ProtectedRoute allowedRoles={[...]}> (src/components/ProtectedRoute.tsx)
+
+        not signed in  ──▶  redirect to /login
+        wrong role     ──▶  redirect to that user's own dashboard
+        correct role   ──▶  renders the area
+
+  ┌────────────────────────┬──────────────┬──────────────────────────────────┐
+  │  ROLE (UserRole)       │  ROUTE ROOT  │  ACCESS                          │
+  ├────────────────────────┼──────────────┼──────────────────────────────────┤
+  │  System Admin          │  /admin/*    │  FULL CONTROL                    │
+  │  'system_admin'        │              │  every case, every module        │
+  ├────────────────────────┼──────────────┼──────────────────────────────────┤
+  │  Attorney              │  /attorney/* │  LIMITED — own cases only        │
+  │  'attorney'            │              │                                  │
+  ├────────────────────────┼──────────────┼──────────────────────────────────┤
+  │  Legal Secretary       │  /secretary/*│  LIMITED — all cases, no delete  │
+  │  'legal_secretary'     │              │                                  │
+  ├────────────────────────┼──────────────┼──────────────────────────────────┤
+  │  User (Client)         │  /user/*     │  LIMITED — own matters only      │
+  │  'user'                │              │                                  │
+  └────────────────────────┴──────────────┴──────────────────────────────────┘
+
+  ── PER ROLE DETAIL ───────────────────────────────────────────────────────
+
+  ┌─ SYSTEM ADMIN ── /admin ─────────────────────────────────────────────────┐
+  │  dashboard · cases (+create/edit/delete) · case detail · documents       │
+  │  (+upload/delete) · inbox · team · knowledge-base (+add/edit/delete)     │
+  │  appointments (+create/delete) · availability (edit) · settings (admin)  │
+  │  ⟶ the ONLY role allowed to DELETE cases, documents and articles         │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ ATTORNEY ── /attorney ──────────────────────────────────────────────────┐
+  │  dashboard · OWN cases (read-only) · case detail · documents (upload)    │
+  │  · inbox · appointments (view) · availability (edit own) · settings      │
+  │  ✖ no create/delete buttons · ✖ no team, no knowledge-base, no calendar  │
+  │  ⟶ sees a case ONLY when cases.assignedToId === user.id                  │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ LEGAL SECRETARY ── /secretary ──────────────────────────────────────────┐
+  │  dashboard · ALL cases (read-only) · case detail · documents (upload)    │
+  │  · inbox · appointments (+create/delete) · calendar · settings           │
+  │  ✖ cannot delete cases or documents · ✖ no team / knowledge-base         │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  ┌─ USER (CLIENT) ── /user ─────────────────────────────────────────────────┐
+  │  dashboard · get-suggestions (NLP) · suggestions/results · my-cases      │
+  │  · articles (+detail) · messages · appointments (view) · profile         │
+  │  ✖ no documents page · ✖ no availability · ✖ cannot create cases         │
+  │  ⟶ sees a case ONLY when cases.clientId === user.id                      │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+  ── HOW "LIMITED" IS ACTUALLY ENFORCED (three independent layers) ──────────
+
+   ┌─ 1 ──────────────────────────────────────────────────────────────────────┐
+   │  ROUTE GUARD      ProtectedRoute   wrong role → own dashboard            │
+   ├─ 2 ──────────────────────────────────────────────────────────────────────┤
+   │  UI CAPABILITIES  CasesList canCreate/canEdit/canDelete,                │
+   │                   DocumentsPage canUpload/canDelete,                    │
+   │                   KnowledgeBasePage canManage, AvailabilityPage canEdit │
+   ├─ 3 ──────────────────────────────────────────────────────────────────────┤
+   │  MSW HANDLERS     401 when no session, 403 on forbidden roles/records   │
+   │                   (the real gate — the UI flags are only cosmetic)      │
+   └─────────────────────────────────────────────────────────────────────────┘
+
+  403 / 401 RULES IN THE MOCK API  (src/mocks/handlers/*.ts)
+  ┌──────────────────────────────┬──────────────────────────────────────────┐
+  │  GET  /api/cases/:id         │ 403 unless owner (see §4)                │
+  │  POST /api/cases             │ 403 for role 'user'                      │
+  │  DELETE /api/cases/:id       │ 403 unless system_admin                  │
+  │  DELETE /api/documents/:id   │ 403 unless system_admin                  │
+  │  POST/PUT/DELETE /api/team/* │ 403 unless system_admin                  │
+  │  POST/PUT/DELETE /api/kn…    │ 403 unless system_admin                  │
+  │  GET /api/knowledge/articles │ public (no auth check)                   │
+  │  POST/PUT /api/users/profile │ authenticated only (own profile)         │
+  │  anything else under /api    │ 401 when no session                      │
+  └──────────────────────────────┴──────────────────────────────────────────┘
+
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  4. ROLE-BASED DATA FILTERING  (inside the MSW handlers)                 ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+  Every list endpoint starts from the same mock array and narrows it using the
+  signed-in user. The rule is always an ownership comparison on an id field.
+
+  FILTER MAP
+  ┌─────────────────┬──────────────┬──────────────────────────────────────────┐
+  │  ROLE           │  CASES       │  RULE APPLIED                            │
+  ├─────────────────┼──────────────┼──────────────────────────────────────────┤
+  │  System Admin   │  all cases   │  (no filter)                             │
+  │  Legal Secretary│  all cases   │  (no filter)                             │
+  │  Attorney       │  own only    │  case.assignedToId === user.id           │
+  │  User (client)  │  own only    │  case.clientId     === user.id           │
+  └─────────────────┴──────────────┴──────────────────────────────────────────┘
+
+  FILTERING DIAGRAM
+      GET /api/cases
+            │
+            ▼
+    ┌────────────────────┐   no session
+    │  getCurrentUser()  ├──────────────▶ 401 { error: 'Not authenticated' }
+    └─────────┬──────────┘
+              ▼
+    ┌──────────────────────────────────────────────────┐
+    │  switch (user.role)                              │
+    │    'attorney' ──▶ filter(c => c.assignedToId …)  │
+    │    'user'     ──▶ filter(c => c.clientId …)      │
+    │    default    ──▶ all records (admin/secretary)  │
+    └─────────┬────────────────────────────────────────┘
+              ▼
+      filtered JSON ──▶ page ──▶ table
+
+  THE SAME OWNERSHIP RULE PER COLLECTION
+  ┌────────────────────┬──────────────────────────────────────────────────────┐
+  │  /api/cases        │ attorney: assignedToId === user.id                   │
+  │                    │ client:   clientId     === user.id                    │
+  ├────────────────────┼──────────────────────────────────────────────────────┤
+  │  /api/cases/:id    │ 403 unless the record matches the rule above         │
+  ├────────────────────┼──────────────────────────────────────────────────────┤
+  │  /api/documents    │ attorney: doc.caseId ∈ their assigned case ids       │
+  │                    │ client:   doc.caseId ∈ their own case ids            │
+  ├────────────────────┼──────────────────────────────────────────────────────┤
+  │  /api/appointments │ attorney: attorneyId === user.id                     │
+  │                    │ client:   clientId   === user.id                      │
+  ├────────────────────┼──────────────────────────────────────────────────────┤
+  │  /api/availability │ attorney: attorneyId === user.id   (others: all)     │
+  ├────────────────────┼──────────────────────────────────────────────────────┤
+  │  /api/inbox        │ system_admin: all;  everyone else: userId === id     │
+  └────────────────────┴──────────────────────────────────────────────────────┘
+
+  NOTE — the ownership filter needs a session, so the MSW "who am I" helper
+  falls back to the persisted localStorage session when the mock login was not
+  the thing that signed you in (see §6.3(c)). That keeps §4 true in both modes.
+
+  KNOWN GAPS in the mock API (documented as-is, not enforced today)
+  ┌──────────────────────────────────┬──────────────────────────────────────┐
+  │  PUT /api/cases/:id              │ no role/ownership check              │
+  │  GET /api/documents/:id          │ no auth check at all                 │
+  │  POST/PUT/DELETE /api/appointments │ no role check                      │
+  │  POST/PUT/DELETE /api/availability │ no role check (UI-only gate)       │
+  │  GET /api/inbox/:id, /reply      │ no ownership check; GET marks read   │
+  │  GET /api/nlp/analyze            │ no auth check                        │
+  └──────────────────────────────────┴──────────────────────────────────────┘
+
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  5. MOCK DATA STRUCTURE  (no database — plain in-browser arrays)         ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+  LOCATION — one file, not a folder:
+      src/mocks/data.ts          ← the dataset (8 exported arrays)
+      src/mocks/handlers/*.ts    ← 11 handler modules that read/write it
+      src/mocks/browser.ts       ← registers them with the service worker
+
+  DATASET   (a FRESH INSTALL — see the note under the table)
+  ┌────────────────┬─────────┬───────────────────┬───────────────────────────┐
+  │  EXPORT        │ RECORDS │  Type (types/)    │  KEY RELATION FIELDS      │
+  ├────────────────┼─────────┼───────────────────┼───────────────────────────┤
+  │  users         │    1    │  User             │  role · id                │
+  │  cases         │    0    │  Case             │  assignedToId → users     │
+  │                │         │                   │  clientId     → users     │
+  │  documents     │    0    │  Document         │  caseId → cases           │
+  │                │         │                   │  uploadedBy → users       │
+  │  inboxMessages │    0    │  InboxMessage     │  userId → users           │
+  │  articles      │    0    │  Article          │  attorneySpecialist (str) │
+  │  appointments  │    0    │  Appointment      │  clientId · attorneyId    │
+  │                │         │                   │        → users            │
+  │  availability  │    0    │  Availability     │  attorneyId → users       │
+  │  teamMembers   │    1    │  TeamMember       │  role · status            │
+  └────────────────┴─────────┴───────────────────┴───────────────────────────┘
+
+  The app ships EMPTY on purpose: the one `users` row is the system
+  administrator (admin@firm.com / password123) and the one `teamMembers` row is
+  the same person, so the firm directory has something to show. Every other
+  collection starts empty and is filled from inside the app:
+
+    staff           → Team Management (POST /api/team) creates the attorney /
+                      secretary AND their sign-in account (default password
+                      password123, changeable in Settings)
+    clients         → self sign-up (POST /api/auth/register)
+    cases           → the admin or secretary, with people picked from
+                      GET /api/attorneys · GET /api/clients
+    documents       → uploaded against one of those cases
+    articles        → written by the admin in the knowledge base
+    appointments    → booked against an attorney's published office hours
+    availability    → published by each attorney
+
+  A team member and a user account are two records for the same person, linked by
+  EMAIL — that is what keeps them in step when the admin creates, renames or
+  removes a member. MSW keeps everything in the page's memory, so a reload
+  returns to this state.
+
+  RELATIONSHIP MAP  (1 ── N, arrows point at the "one" side)
+
+                       ┌────────────┐
+                       │   users    │◀─┐  id
+                       └─────┬──────┘  │
+         assignedToId ───────┘         │ clientId
+                  │                    │
+                  ▼                    ▼
+            ┌──────────────────────────────┐
+            │            cases             │
+            └───────────────┬──────────────┘
+                            │ caseId
+                            ▼
+                    ┌───────────────┐
+                    │   documents   │   uploadedBy → users.id
+                    └───────────────┘
+
+     users ──1:N──▶ inboxMessages     (userId)
+     users ──1:N──▶ appointments      (attorneyId AND clientId — two links)
+     users ──1:N──▶ availability      (attorneyId)
+     users ──1:N──▶ teamMembers       (role/status only — no user id)
+     articles ──N:M──▶ cases          indirect: article.keywords match a query
+
+  TWO THINGS THE ORIGINAL BRIEF GOT DIFFERENTLY
+     • "cases to emails (1:N)"  → messages are keyed by users.userId, NOT by a
+       case, so it is actually users ──1:N──▶ inboxMessages.
+     • "users to articles (1:N)" → Article has no author id at all. It stores
+       attorneySpecialist as a NAME string (a practice-area label such as
+       'Patent Attorney'), so there is no FK from articles back to users.
+
+  ENDPOINTS SERVED BY THE 11 HANDLER MODULES
+  ┌──────────────┬────────────────────────────┬──────────────────────────────┐
+  │  auth.ts     │  /api/auth/login           │  also owns getCurrentUser()  │
+  │              │  /api/auth/register        │  (used by every filter, §4)  │
+  │              │  /api/auth/logout · /me    │                              │
+  │  cases.ts    │  GET/POST /api/cases       │  role filter + 403 checks    │
+  │              │  GET/PUT/DELETE /:id       │                              │
+  │  documents.ts│  /api/documents (+upload)  │  filtered by case ownership  │
+  │  inbox.ts    │  /api/inbox (+/:id/reply)  │  non-admin sees own only     │
+  │  knowledge.ts│  /api/knowledge/articles   │  read: public · write: admin │
+  │  nlp.ts      │  POST /api/nlp/analyze     │  keyword mock for the AI     │
+  │              │                            │  fallback (see §2)           │
+  │  appointments│  /api/appointments         │  attorney/client own only    │
+  │  availability│  /api/availability         │  attorney owns rows          │
+  │  team.ts     │  /api/team                 │  system_admin only — and it  │
+  │              │                            │  creates the login account   │
+  │  settings.ts │  /api/users/profile       │  + /password (current check)  │
+  │  directory.ts│  GET /api/attorneys        │  people pickers for the      │
+  │              │  GET /api/clients          │  create forms (staff only)   │
+  └──────────────┴────────────────────────────┴──────────────────────────────┘
+
+  LIFETIME OF THE DATA
+      page load ──▶ data.ts arrays are imported
+                ──▶ each handler does  let casesData = [...cases]
+                ──▶ your edits mutate THAT copy (visible until reload)
+                ──▶ reload / F5 ──▶ back to the seed values in data.ts
+      Nothing is written to disk, and nothing survives a refresh.
+
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  6. TECHNOLOGY STACK                                                     ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+  6.1  FRONTEND
+  ┌──────────────────────┬────────────────┬───────────────────────────────────┐
+  │  React               │  ^19.3.0       │  UI + hooks                       │
+  │  TypeScript          │  ~6.0.2        │  strict, noEmit typecheck         │
+  │  Vite                │  ^5.4.21       │  dev server :5173 + prod build     │
+  │  Tailwind CSS        │  ^3.4.19       │  utility styling                  │
+  │  Zustand             │  ^5.0.15       │  stores: auth, cases, documents,  │
+  │                      │                │  inbox, knowledge, appointments   │
+  │  Framer Motion       │  ^13.4.2       │  page/transition animation        │
+  │  React Router DOM    │  ^7.18.3       │  role route trees (see §3)        │
+  │  Lucide React        │  ^1.45.0       │  icon set                         │
+  └──────────────────────┴────────────────┴───────────────────────────────────┘
+     Styling pipeline note: Tailwind runs through PostCSS (postcss.config.js +
+     tailwind.config.js); the @tailwindcss/vite v4 plugin is listed in
+     devDependencies but is not wired into vite.config.ts.
+
+  6.2  MOCK API  +  AI SERVICE
+  ┌──────────────────────┬────────────────────────────────────────────────────┤
+  │  Mock API            │  MSW ^2.15.0 — service worker, src/mocks/browser.ts│
+  │                      │  onUnhandledRequest: 'bypass'                      │
+  │  AI service          │  OpenRouter  https://openrouter.ai/api/v1          │
+  │                      │  called directly from the browser                  │
+  │  API key             │  1. device override in localStorage (Settings →    │
+  │                      │     AI engine)  2. VITE_OPENROUTER_API_KEY in .env │
+  │  Model chain         │  PRIMARY   poolside/laguna-s-2.1:free              │
+  │  (src/ai/models/     │  FALLBACK  nvidia/nemotron-3-super-120b-a12b:free  │
+  │   legalModel.ts)     │  FAST      poolside/laguna-xs-2.1:free             │
+  │  Budgets             │  60 s per attempt · 120 s whole chain · 1 retry    │
+  │                      │  hedge off (would cost 2× quota)                   │
+  │  Free-tier limit     │  50 free-model requests/day (per OpenRouter key)   │
+  └──────────────────────┴────────────────────────────────────────────────────┘
+
+  6.3  WHERE THE BRIEF DIFFERS FROM THE CODE  (please read)
+
+   (a) PROJECT NAME
+       The brief says "LegalFlow". This project was renamed to JURISFLOW, and
+       every string, package comment and test now says JurisFlow. The only
+       remaining "legalflow" reference is a one-time localStorage migration key
+       so an already-saved AI key is not lost on the rename.
+
+   (b) AI MODEL
+       The brief says  deepseek/deepseek-r1:free.
+       That id is NOT usable: it is no longer offered as a free model by
+       OpenRouter (verified against the live catalogue — 458 models, 21 free).
+       An earlier PRIMARY, nex-agi/nex-n2.5-pro:free, is gone too, and the
+       openrouter/free auto-router was deliberately removed from the chain
+       because it could route to nvidia/nemotron-3.5-content-safety:free — a
+       safety classifier that cannot produce legal JSON.
+       The chain in 6.2 is what actually runs and what the accuracy tests cover.
+
+   (c) "NO BACKEND / NO DATABASE"
+       TRUE for app data (cases, documents, inbox, articles, appointments,
+       availability, team) and for the AI path — see §1, §2 and §5.
+       NOT TRUE for accounts. The repo also ships an OPTIONAL auth service:
+            server/*.mjs            Node ESM + Express 5
+            server/schema.sql       MySQL table `users`
+            server/setup.mjs        npm run db:setup   (create + seed)
+            server/index.mjs        npm run api        (listen on :4001)
+       The `.env` file is NOT committed (it is gitignored; only `.env.example`
+       is), so a fresh clone has no backend set and VITE_AUTH_BACKEND falls back
+       to `mock`: login and sign-up are answered by MSW, and a registration
+       lives only in that browser session. `server/setup.mjs` provisions the
+       same single administrator the mock ships (admin@firm.com / password123).
+            ▸ to persist accounts in MySQL:  VITE_AUTH_BACKEND=mysql  in .env,
+              then npm run db:setup + npm run api. There, MSW's auth handlers
+              are skipped, everything else stays mocked, and the MSW "who am I"
+              helper falls back to the localStorage session so the §4 filtering
+              keeps working.
+            ▸ NOTE — the Team screen writes to the mock user store, so a member
+              added there while the MySQL backend is active cannot sign in until
+              the same row exists in the `users` table.
+             ▸ db:setup only UPSERTS what it knows, so rows from an OLDER seed
+               (john/michael/sarah@firm.com, clienta/clientb@email.com) survive,
+               and `npm run db:setup -- reset` is the way to drop them: it
+               re-creates the table with the administrator only, so client
+               registrations go too.
+
+  6.4  HOW TO RUN
+  ┌────────────────────┬──────────────────────────────────────────────────────┐
+  │  npm run dev       │  Vite dev server on http://localhost:5173            │
+  │  npm run build     │  tsc && vite build → dist/                           │
+  │  npm run test      │  8 suites, 418 checks passed (see 6.5)               │
+  │  npm run api       │  OPTIONAL: auth API on :4001 (needs MySQL running)   │
+  │  npm run db:setup  │  OPTIONAL: create + seed the MySQL accounts table    │
+  │  npm run db:users  │  OPTIONAL: list the accounts saved in MySQL          │
+  │  npm run env:check │  prints the AI key status + the account backend      │
+  └────────────────────┴──────────────────────────────────────────────────────┘
+
+  6.5  VERIFICATION (measured when this document was written)
+  ┌──────────────────────────┬────────────────────────────────────────────────┐
+  │  tsc --noEmit            │  exit 0 — no type errors                       │
+  │  checks run              │  418 PASS · 0 FAIL                             │
+  │  suites passing          │  ai · ai-key · live-path · modal · theme ·     │
+  │                          │  landing · auth · auth:msw                     │
+  │  auth:mysql              │  SKIP — MySQL not reachable at 127.0.0.1:3306; │
+  │                          │  start XAMPP MySQL and re-run that suite       │
+  │  npm run build           │  2603 modules transformed · ✓ built in 5.17 s  │
+  └──────────────────────────┴────────────────────────────────────────────────┘
+
+  ───────────────────────────────────────────────────────────────────────────
+  END OF DOCUMENT — docs/system-block-diagram.txt
+  Source of truth is always the code: src/ · src/mocks/ · src/ai/ · server/
+  ───────────────────────────────────────────────────────────────────────────
+
+
+
+
+

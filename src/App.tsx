@@ -6,6 +6,7 @@ import { DashboardLayout } from './components/DashboardLayout';
 // Public
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
+import { SignUpPage } from './pages/SignUpPage';
 
 // Admin
 import { AdminDashboard } from './pages/admin/Dashboard';
@@ -45,6 +46,7 @@ const App: React.FC = () => {
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignUpPage />} />
 
         {/* System Admin Routes */}
         <Route path="/admin" element={

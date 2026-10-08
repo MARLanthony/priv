@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAvailabilityStore } from '../../stores/appStores';
+import { useDirectoryStore } from '../../stores/directoryStore';
+import { useAuthStore } from '../../stores/authStore';
 import { PageHeader, GlassCard, Modal } from '../../components/UI';
 import { Clock, Plus, Trash2, Check, X } from 'lucide-react';
 
@@ -9,10 +11,30 @@ interface AvailabilityPageProps {
 
 export const AvailabilityPage: React.FC<AvailabilityPageProps> = ({ canEdit = true }) => {
   const { slots, fetchAvailability, createSlot, updateSlot, deleteSlot } = useAvailabilityStore();
+  const { user } = useAuthStore();
+  // Named `attorneyOptions` because this page already has a local `attorneys`:
+  // the list of names found in the fetched slots (a different thing entirely).
+  const { attorneys: attorneyOptions, fetchAttorneys } = useDirectoryStore();
   const [showAdd, setShowAdd] = useState(false);
-  const [newSlot, setNewSlot] = useState({ attorneyId: 2, attorneyName: 'John Smith', dayOfWeek: 'Monday', startTime: '09:00', endTime: '17:00', isAvailable: true });
 
-  useEffect(() => { fetchAvailability(); }, []);
+  /*
+   * An attorney publishes their OWN hours; the admin publishes for any attorney.
+   * The dataset ships with no schedule, so nothing may be pre-filled with a demo
+   * attorney (see src/mocks/handlers/directory.ts).
+   */
+  const isAttorney = user?.role === 'attorney';
+  const [newSlot, setNewSlot] = useState(() => ({
+    attorneyId: isAttorney ? (user?.id ?? 0) : 0,
+    attorneyName: isAttorney ? (user?.name ?? '') : '',
+    dayOfWeek: 'Monday', startTime: '09:00', endTime: '17:00', isAvailable: true,
+  }));
+
+  useEffect(() => {
+    fetchAvailability();
+    if (canEdit && !isAttorney) fetchAttorneys();
+  }, []);
+
+  const canSubmitSlot = Boolean(newSlot.attorneyId && newSlot.startTime && newSlot.endTime);
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   const attorneys = [...new Set(slots.map(s => s.attorneyName))];
@@ -71,6 +93,30 @@ export const AvailabilityPage: React.FC<AvailabilityPageProps> = ({ canEdit = tr
 
       <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Add Availability Slot">
         <div className="space-y-4">
+          {isAttorney ? (
+            <div>
+              <label className="text-sm text-text-secondary block mb-1">Attorney</label>
+              <input value={newSlot.attorneyName} readOnly className="glass-input w-full px-4 py-2.5 text-sm opacity-70" />
+            </div>
+          ) : (
+            <div>
+              <label className="text-sm text-text-secondary block mb-1">Attorney</label>
+              <select
+                value={newSlot.attorneyId}
+                onChange={e => {
+                  const attorney = attorneyOptions.find(a => a.id === Number(e.target.value));
+                  setNewSlot({ ...newSlot, attorneyId: attorney?.id ?? 0, attorneyName: attorney?.name ?? '' });
+                }}
+                className="glass-input w-full px-4 py-2.5 text-sm"
+              >
+                <option value={0}>Select an attorney…</option>
+                {attorneyOptions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+              {attorneyOptions.length === 0 && (
+                <p className="text-[11px] text-text-muted mt-1">No attorneys yet — add one in Team Management.</p>
+              )}
+            </div>
+          )}
           <div>
             <label className="text-sm text-text-secondary block mb-1">Day of Week</label>
             <select value={newSlot.dayOfWeek} onChange={e => setNewSlot({...newSlot, dayOfWeek: e.target.value})} className="glass-input w-full px-4 py-2.5 text-sm">
@@ -89,7 +135,7 @@ export const AvailabilityPage: React.FC<AvailabilityPageProps> = ({ canEdit = tr
           </div>
           <div className="flex justify-end gap-3 mt-4">
             <button onClick={() => setShowAdd(false)} className="btn-secondary">Cancel</button>
-            <button onClick={() => { createSlot(newSlot); setShowAdd(false); }} className="btn-primary">Add Slot</button>
+            <button onClick={() => { if (!canSubmitSlot) return; createSlot(newSlot); setShowAdd(false); }} disabled={!canSubmitSlot} className="btn-primary disabled:opacity-50">Add Slot</button>
           </div>
         </div>
       </Modal>

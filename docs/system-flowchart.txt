@@ -1,0 +1,610 @@
+╔══════════════════════════════════════════════════════════════════════════╗
+║ JurisFlow — SYSTEM FLOWCHART                                             ║
+║ Frontend only: React 19 + TypeScript + Vite · mock data from MSW         ║
+║ AI suggestions via OpenRouter, called straight from the browser          ║
+║                                                                          ║
+║ The app here is called JurisFlow, in the code and in the UI.             ║
+║ It was renamed from "LegalFlow"; only localStorage key names keep the    ║
+║ old prefix. Every route, label and file path in this document comes      ║
+║ from src/ and src/mocks/.                                                ║
+║                                                                          ║
+║ CONTENTS                                                                 ║
+║   1. COMPLETE SYSTEM FLOWCHART                                           ║
+║   2. ROLE-BASED FLOWCHART                                                ║
+║   3. NLP SUGGESTION FLOWCHART   (core feature)                           ║
+║   4. CASE MANAGEMENT FLOWCHART                                           ║
+║   5. APPOINTMENT FLOWCHART                                               ║
+║   6. LEGEND, ROLE TABLE AND SOURCE MAP                                   ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║   1. COMPLETE SYSTEM FLOWCHART                                           ║
+╚══════════════════════════════════════════════════════════════════════════╝
+  One journey: landing page → login → role check → role dashboard → role
+  features → logout. Boxes are screens or states, ▼ is the way the user moves.
+
+  ┌────────────────────────────────────────────────────────────┐
+  │ START                                                      │
+  │ User opens http://localhost:5173                           │
+  │ (npm run dev — Vite dev server)                            │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Landing Page                  route: /                     │
+  │ src/pages/LandingPage.tsx                                  │
+  │ Hero · Features · HowItWorks · Stats · CTA                 │
+  │ 'Sign In' / 'Create an account' → /login or /signup        │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Login Page                    route: /login                │
+  │ src/pages/LoginPage.tsx — one-click admin sign-in          │
+  │ POST /api/auth/login → MSW auth handler                    │
+  │ (the admin is the only seeded account — see note 6e;       │
+  │ VITE_AUTH_BACKEND=mysql swaps in the real API)             │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ ROLE CHECK                                                 │
+  │ authStore.login() saves user + token (localStorage)        │
+  │ getRoleBasePath(user.role) picks the URL prefix            │
+  │ ProtectedRoute(allowedRoles) guards each role subtree      │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+              ┌─────────────────┼─────────────────┬─────────────────┐
+              ▼                 ▼                 ▼                 ▼
+       ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+       │ system_admin │  │ attorney     │  │ secretary    │  │ user         │
+       │ /admin       │  │ /attorney    │  │ /secretary   │  │ /user        │
+       │ 9 nav items  │  │ 7 nav items  │  │ 7 nav items  │  │ 7 nav items  │
+       └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
+              │                 │                 │                 │
+              └─────────────────┼─────────────────┴─────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ ROLE-BASED DASHBOARD   (DashboardLayout)                   │
+  │ Sidebar.getNavItems(role) builds the role menu             │
+  │ Navbar shows the role label (System Administrator,         │
+  │ Attorney, Legal Secretary, Client) + the Log Out button    │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ ROLE FEATURES   (one chain per role in section 2)          │
+  │ every sidebar entry is a route rendered inside the layout  │
+  │ all app data is mock data served by MSW — no backend,      │
+  │ no database, nothing leaves the browser except the AI call │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Logout   (Navbar → "Log Out")                              │
+  │ authStore.logout() clears localStorage + the store         │
+  │ navigate('/login') — works even while the API is offline   │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ END   (session closed — the same flow can start again)     │
+  └────────────────────────────────────────────────────────────┘
+
+  NOTE — the whole /admin, /attorney, /secretary and /user subtree is wrapped
+  in <ProtectedRoute allowedRoles={[...]}> (src/components/ProtectedRoute.tsx):
+  a signed-out visitor is sent to /login, and a signed-in user who opens
+  another role's URL is sent to their own dashboard instead.
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║   2. ROLE-BASED FLOWCHART                                                ║
+╚══════════════════════════════════════════════════════════════════════════╝
+  Four roles, four URL prefixes, four sidebar menus (Sidebar.getNavItems).
+  The chains below follow the sidebar order inside src/components/Sidebar.tsx.
+  ▼ always means 'the next step of that role's work'.
+
+── ROLE 1 — SYSTEM ADMIN   (role key: system_admin · /admin) ───────────────
+
+  The only role that manages people, the knowledge base and the whole calendar.
+
+  ┌────────────────────────────────────────────────────────────┐
+  │ Dashboard               /admin/dashboard                   │
+  │ src/pages/admin/Dashboard.tsx — firm-wide stats            │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ All Cases               /admin/cases                       │
+  │ CasesList canCreate canEdit canDelete                      │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Team Management         /admin/team                        │
+  │ src/pages/admin/TeamPage.tsx — creates staff login         │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Knowledge Base          /admin/knowledge-base              │
+  │ KnowledgeBasePage canManage + /add form                    │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ All Appointments        /admin/appointments                │
+  │ AppointmentsPage canCreate canDelete                       │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ System Settings         /admin/settings                    │
+  │ SettingsPage isAdmin — profile, password, AI key           │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Logout                  Navbar → Log Out                   │
+  │ logout() clears the session → '/login'                     │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ END                                                        │
+  └────────────────────────────────────────────────────────────┘
+
+  Extra sidebar entries the code also has: All Documents (/admin/documents,
+  canUpload canDelete) and All Inbox (/admin/inbox).
+
+── ROLE 2 — ATTORNEY   (role key: attorney · /attorney) ────────────────────
+
+  Sees only their own workload: cases, files, mail, diary and office hours.
+
+  ┌────────────────────────────────────────────────────────────┐
+  │ Dashboard               /attorney/dashboard                │
+  │ src/pages/attorney/Dashboard.tsx                           │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ My Cases                /attorney/cases                    │
+  │ only cases where assignedToId === user.id                  │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ My Documents            /attorney/documents                │
+  │ DocumentsPage canUpload — own case files                   │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ My Inbox                /attorney/inbox                    │
+  │ own messages only (userId === user.id)                     │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ My Appointments         /attorney/appointments             │
+  │ own appointments (attorneyId === user.id)                  │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ My Availability         /attorney/availability             │
+  │ AvailabilityPage canEdit → /api/availability               │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Logout                  Navbar → Log Out                   │
+  │ logout() → '/login'                                        │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ END                                                        │
+  └────────────────────────────────────────────────────────────┘
+
+  My Settings (/attorney/settings) is an extra sidebar entry in the code; it is
+  not a step of the workflow above.
+
+── ROLE 3 — LEGAL SECRETARY   (role key: legal_secretary · /secretary) ─────
+
+  Front-office role: every case is visible, but people management is not.
+
+  ┌────────────────────────────────────────────────────────────┐
+  │ Dashboard               /secretary/dashboard               │
+  │ src/pages/secretary/Dashboard.tsx                          │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ All Cases               /secretary/cases                   │
+  │ all cases — no ownership filter, no create                 │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Upload Docs             /secretary/documents               │
+  │ DocumentsPage canUpload → POST /api/documents              │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Draft Inbox             /secretary/inbox                   │
+  │ read the client threads + send a reply                     │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Manage Appointments     /secretary/appointments            │
+  │ AppointmentsPage canCreate canDelete                       │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Calendar                /secretary/calendar                │
+  │ src/pages/secretary/CalendarPage.tsx                       │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Logout                  Navbar → Log Out                   │
+  │ logout() → '/login'                                        │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ END                                                        │
+  └────────────────────────────────────────────────────────────┘
+
+  There is no Availability page for this role (that route exists for admin and
+  attorney only). Settings (/secretary/settings) is the last sidebar entry.
+
+── ROLE 4 — USER / CLIENT   (role key: user · /user) ───────────────────────
+
+  The AI intake role: describe the problem, read the suggestions, book a slot.
+
+  ┌────────────────────────────────────────────────────────────┐
+  │ Dashboard               /user/dashboard                    │
+  │ src/pages/user/Dashboard.tsx — my cases + AI shortcut      │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Type Problem            /user/get-suggestions              │
+  │ free-text "Describe Your Legal Issue" textarea             │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ NLP Analysis            (AIProcessingModal)                │
+  │ analyzeLegalProblem() → section 3                          │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ View Suggestions        /user/suggestions/results          │
+  │ case type · urgency · articles · attorney · slots          │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Book Appointment        /user/appointments                 │
+  │ New Appointment modal, or a "Book" slot button             │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ My Cases                /user/my-cases                     │
+  │ cases where clientId === user.id — read only               │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Logout                  Navbar → Log Out                   │
+  │ logout() → '/login'                                        │
+  └────────────────────────────────────────────────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ END                                                        │
+  └────────────────────────────────────────────────────────────┘
+
+  Articles (/user/articles), Messages (/user/messages) and Profile (/user/profile)
+  are extra sidebar entries in the code.
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║   3. NLP SUGGESTION FLOWCHART   (CORE FEATURE)                           ║
+╚══════════════════════════════════════════════════════════════════════════╝
+  3a. The headline flow — what happens between one click and one screen:
+  ┌────────────────────────────────────────────────────────────┐
+  │ START                                                      │
+  │ Client signed in as role "user" (protected /user subtree)  │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ 1. User types the problem    /user/get-suggestions         │
+  │ GetSuggestionsPage.tsx — free-text textarea, plus 5 sample │
+  │ queries that fill the box on click                         │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ 2. React sends the request                                 │
+  │ analyzeLegalProblem(query, { onProgress }) — nlpService.ts │
+  │ the onProgress events drive the AIProcessingModal stages   │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ 3. MSW intercepts the call   (mock path)                   │
+  │ POST /api/nlp/analyze → src/mocks/handlers/nlp.ts          │
+  │ keyword match against the knowledge-base articles          │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ 4. OpenRouter AI   (live path)                             │
+  │ openrouter.ai/api/v1/chat/completions, called straight     │
+  │ from the browser · legal-intake prompt                     │
+  │ model chain: PRIMARY → FALLBACK → FAST                     │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ 5. The AI returns JSON                                     │
+  │ parseResponse.normalizeLegalAnalysis() validates the shape │
+  │ confidence 0 + a non-legal case type = refusal, not advice │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ 6. React displays the suggestions                          │
+  │ /user/suggestions/results — SuggestionsResultsPage.tsx     │
+  │ suggested case type, urgency, matched articles,            │
+  │ recommended attorney, available slots                      │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ END                                                        │
+  │ the result stays in the Zustand store until you leave      │
+  └────────────────────────────────────────────────────────────┘
+
+  NOTE — the order of steps 3 and 4. The brief puts MSW before OpenRouter; the
+  code does the opposite. analyzeLegalProblem() tries OPENROUTER FIRST and only
+  replays the MSW endpoint when the live AI is missing, rate-limited, timed out
+  or unparseable. The UI is honest about which one answered: every result carries
+  a source of 'openrouter' | 'msw' | 'fallback', shown as a badge on the results
+  page. The four levels are listed in 3b.
+
+── 3b. WHAT THE SERVICE REALLY DOES ────────────────────────────────────────
+
+  Four levels, always tried in this order (src/ai/services/nlpService.ts):
+  ┌───────┬──────────────────────────────────┬──────────────────┐
+  │ LEVEL │ WHAT IT DOES                     │ SPEED            │
+  ├───────┼──────────────────────────────────┼──────────────────┤
+  │ 1     │ cached result, same description  │ instant          │
+  │ 2     │ OPENROUTER · legal-intake prompt │ a few seconds    │
+  │ 3     │ MSW /api/nlp/analyze keyword hit │ instant, offline │
+  │ 4     │ local keyword scan, no network   │ last resort      │
+  └───────┴──────────────────────────────────┴──────────────────┘
+
+  Progress stages the modal can show (AIProgressStage in src/ai/types/index.ts):
+    preparing ▶ requesting ▶ retrying ▶ received ▶ parsing ▶ enriching ▶
+    fallback ▶ done
+  The countdown is real data: a rolling average of the last 8 runs, kept in
+  localStorage under the key jurisflow.ai.intake.samples.
+
+  Enrichment — after the model answers, still inside nlpService:
+  ┌────────────────────────────────────┬──────────────────────────┐
+  │ CALL                               │ RESULT                   │
+  ├────────────────────────────────────┼──────────────────────────┤
+  │ GET /api/knowledge/articles (MSW)  │ matched articles         │
+  │ GET /api/availability (MSW)        │ attorney + slots         │
+  └────────────────────────────────────┴──────────────────────────┘
+
+  The object handed to the UI (frontend type NLPAnalysis):
+    query · extractedKeywords · suggestedCaseType · confidence · matchedArticles
+    recommendedAttorney { name, specialization, availableSlots }
+    requiredServices · nextSteps   (+ urgency, source, model, keyFacts)
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║   4. CASE MANAGEMENT FLOWCHART                                           ║
+╚══════════════════════════════════════════════════════════════════════════╝
+  One component renders the list for every role (src/pages/shared/CasesList.tsx);
+  the role decides the URL prefix, the data and the action buttons.
+
+  ┌────────────────────────────────────────────────────────────┐
+  │ View Cases   (CasesList)                                   │
+  │ /admin/cases · /attorney/cases · /secretary/cases          │
+  │ /user/my-cases → GET /api/cases (MSW) · starts empty       │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Filter by role   (in the MSW handler, not in the page)     │
+  │ attorney  → cases where assignedToId === user.id           │
+  │ user      → cases where clientId     === user.id           │
+  │ admin + secretary → every case in the dataset              │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Filter in the page   (client side)                         │
+  │ search by title or case number · status chips:             │
+  │ all · active · pending · discovery · closed                │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ View Case Detail   …/cases/:id   (CaseDetail.tsx)          │
+  │ GET /api/cases/:id → currentCase + GET /api/documents      │
+  │ the screen is built from the shared <Tabs> component       │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+          ┌──────────────────┬──┴───────────────┬──────────────────┐
+          ▼                  ▼                  ▼                  ▼
+  ┌────────────────┐ ┌────────────────┐ ┌────────────────┐ ┌────────────────┐
+  │ Overview       │ │ Documents      │ │ Timeline       │ │ Messages       │
+  │ description    │ │ case files     │ │ created and    │ │ case messages  │
+  │ priority/type  │ │ /api/documents │ │ updated dates  │ │ between the    │
+  │ who is on it   │ │ GET, filtered  │ │ shown as       │ │ firm and the   │
+  │ next hearing   │ │ by case id     │ │ entries        │ │ client         │
+  └───────┬────────┘ └───────┬────────┘ └───────┬────────┘ └───────┬────────┘
+          │                  │                  │                  │
+          └──────────────────┴──┬───────────────┴──────────────────┘
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ Act on the case   (buttons depend on the role)             │
+  │ admin: create (New Case) · edit · delete                   │
+  │ attorney + secretary: read, upload documents, reply        │
+  │ client: read only, and only their own cases                │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ END   (Back to Cases → navigate(-1) returns to the list)   │
+  └────────────────────────────────────────────────────────────┘
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║   5. APPOINTMENT FLOWCHART                                               ║
+╚══════════════════════════════════════════════════════════════════════════╝
+  Attorney publishes the hours → client sees the free slots → client books →
+  both sides see the confirmation.
+
+  ┌────────────────────────────────────────────────────────────┐
+  │ START   (the firm publishes when its attorneys are free)   │
+  │ AvailabilityPage canEdit → /attorney/availability          │
+  │ (the admin sees the same screen at /admin/availability)    │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ STEP 1 — Attorney sets availability                        │
+  │ day (Monday–Friday) + start time + end time + isAvailable  │
+  │ POST /api/availability — MSW keeps it in memory            │
+  │ PUT /api/availability/:id and DELETE edit or drop a slot   │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ STEP 2 — User sees the slots                               │
+  │ SuggestionsResultsPage card "Available Appointment Slots": │
+  │ nlpService builds it from GET /api/availability, and falls │
+  │ back to weekday 10:00 / 14:00 slots when it is empty       │
+  │ and /user/appointments lists what is already booked        │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ STEP 3 — User books a slot                                 │
+  │ New Appointment modal: title, date, time, duration, type,  │
+  │ notes, location → createAppointment() in appStores         │
+  │ POST /api/appointments → the record is "scheduled"         │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ STEP 4 — Confirmation                                      │
+  │ the card appears under "Upcoming" (status scheduled)       │
+  │ completed or cancelled rows drop into "Past" · admin,      │
+  │ secretary and the client can delete from the card          │
+  └─────────────────────────────┬──────────────────────────────┘
+                                │
+                                ▼
+  ┌────────────────────────────────────────────────────────────┐
+  │ END   (booked — nothing is stored outside the browser)     │
+  └────────────────────────────────────────────────────────────┘
+
+  WHO CAN DO WHAT
+  ┌──────────────────────┬────────────────────────────────────────┐
+  │ ROLE                 │ APPOINTMENTS                           │
+  ├──────────────────────┼────────────────────────────────────────┤
+  │ System Admin         │ all appointments · create + delete     │
+  │ Attorney             │ own appointments · create + delete     │
+  │ Legal Secretary      │ all appointments · create + delete     │
+  │ Client (user)        │ own appointments · create + delete     │
+  └──────────────────────┴────────────────────────────────────────┘
+
+  NOTE — AppointmentsPage defaults canCreate and canDelete to true, and the
+  admin and secretary routes pass them explicitly, so in this build every role
+  that mounts the page (admin, attorney, secretary, client) can book and delete.
+  The client sees a "Book" link on each suggested slot in
+  SuggestionsResultsPage; that link is rendered but not wired to the create
+  call, so booking is done from /user/appointments. Availability is an
+  attorney/admin screen only: there is no /user/availability route.
+  The secretary is the only role with the Calendar view (/secretary/calendar).
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║   6. LEGEND, ROLE TABLE AND SOURCE MAP                                   ║
+╚══════════════════════════════════════════════════════════════════════════╝
+── 6a. LEGEND ──────────────────────────────────────────────────────────────
+
+  ┌────────────────┬────────────────────────────────────────────┐
+  │ SYMBOL         │ MEANING                                    │
+  ├────────────────┼────────────────────────────────────────────┤
+  │ ┌ ─ ┐ │ └ ┘    │ a screen, state or component (a box)       │
+  │ ┬ ┴ ├ ┤ ┼      │ a border that continues elsewhere          │
+  │ ▼ ▲            │ direction of travel (down / back up)       │
+  │ ▶ ◀            │ sideways step (next / previous)            │
+  │ ═══ ║ ╔ ╗      │ section banner, not part of a flow         │
+  │ START / END    │ first and last node of every flow          │
+  └────────────────┴────────────────────────────────────────────┘
+
+── 6b. ROLE TABLE ──────────────────────────────────────────────────────────
+
+  ┌──────────────────────┬────────────────────────────────────────────┐
+  │ ROLE                 │ ROLE KEY + URL PREFIX                      │
+  ├──────────────────────┼────────────────────────────────────────────┤
+  │ System Administrator │ system_admin → /admin                      │
+  │ Attorney             │ attorney → /attorney                       │
+  │ Legal Secretary      │ legal_secretary → /secretary               │
+  │ Client               │ user → /user                               │
+  └──────────────────────┴────────────────────────────────────────────┘
+
+── 6c. SOURCE MAP ──────────────────────────────────────────────────────────
+
+  ┌────────────────────────────────────────────┬────────────────────────┐
+  │ FILE                                       │ ROLE IN THE FLOW       │
+  ├────────────────────────────────────────────┼────────────────────────┤
+  │ src/App.tsx                                │ every route + guard    │
+  │ src/components/ProtectedRoute.tsx          │ the role gate          │
+  │ src/components/DashboardLayout.tsx         │ sidebar + navbar shell │
+  │ src/components/Sidebar.tsx                 │ getNavItems(role)      │
+  │ src/pages/LandingPage.tsx                  │ public landing page    │
+  │ src/pages/LoginPage.tsx                    │ sign in (admin only)   │
+  │ src/pages/SignUpPage.tsx                   │ create an account      │
+  │ src/pages/user/GetSuggestionsPage.tsx      │ the NLP input form     │
+  │ src/pages/user/SuggestionsResultsPage.tsx  │ the AI results         │
+  │ src/ai/services/nlpService.ts              │ the NLP pipeline       │
+  │ src/ai/config/openrouter.ts                │ key + endpoint         │
+  │ src/mocks/handlers/nlp.ts                  │ mock AI endpoint       │
+  │ src/mocks/data.ts                          │ the mock dataset       │
+  │ src/mocks/browser.ts                       │ MSW worker setup       │
+  │ src/pages/shared/CasesList.tsx             │ list + filters         │
+  │ src/pages/shared/CaseDetail.tsx            │ the 4 tabs             │
+  │ src/pages/shared/AppointmentsPage.tsx      │ appointment cards      │
+  │ src/pages/shared/AvailabilityPage.tsx      │ attorney hours         │
+  │ src/pages/admin/TeamPage.tsx               │ adds staff + logins    │
+  │ src/mocks/handlers/team.ts                 │ staff ⇄ account pair   │
+  │ src/stores/directoryStore.ts               │ people pickers         │
+  └────────────────────────────────────────────┴────────────────────────┘
+
+── 6d. NOTES ───────────────────────────────────────────────────────────────
+
+  (a) MSW vs OpenRouter. The brief order "React → MSW → OpenRouter" is not what
+      the code does: the AI service calls OpenRouter first and uses the mocked
+      /api/nlp/analyze endpoint only as the offline fallback (section 3b). App
+      data — cases, documents, inbox, articles, appointments, availability,
+      team, users — is always MSW: it lives in src/mocks/data.ts and resets on
+      every page reload.
+
+  (b) Naming. The app is JurisFlow in the code and in the UI; the repo was
+      renamed from "LegalFlow". Only localStorage key names keep the legacy
+      prefix (a one-time migration for an already-saved AI key).
+
+  (c) "Frontend only". Every screen here is React + TypeScript running in the
+      browser, and every /api/* call is answered by the MSW service worker, so
+      there is no backend and no database. The repo does ship an OPTIONAL
+      Express + MySQL auth service in server/: with VITE_AUTH_BACKEND=mysql the
+      login and register routes are answered by it instead of the mock, while
+      everything else stays mocked. Use VITE_AUTH_BACKEND=mock for a demo that
+      is 100% frontend.
+
+  (d) The one real request. https://openrouter.ai/api/v1/chat/completions is
+      called straight from React with the key from .env (or the per-device key
+      saved in Settings). Without a key, without free quota, or with JSON the
+      parser rejects, levels 3 and 4 of section 3b keep the demo working and
+      label the result as "msw" or "fallback".
+
+  (e) FRESH INSTALL. The dataset starts EMPTY (src/mocks/data.ts): no cases,
+      documents, inbox threads, articles, appointments or office hours, and one
+      account only — the system administrator, who is also the single team row.
+      Staff accounts come from the admin in Team Management: POST /api/team
+      creates the directory card AND the sign-in account (default password
+      password123, changeable in Settings), and deleting a member deletes both.
+      Clients create their own account at /signup. Every create form therefore
+      picks real people from the directory (/api/attorneys · /api/clients) or a
+      real case, instead of a hard-coded demo name. A page reload returns to the
+      empty state, because MSW keeps all of it in the page's memory.
+
+────────────────────────────────────────────────────────────────────────────
+  END OF DOCUMENT — docs/system-flowchart.txt
+  Source of truth is always the code: src/ · src/mocks/ · src/ai/
+────────────────────────────────────────────────────────────────────────────

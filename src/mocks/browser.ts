@@ -9,9 +9,20 @@ import { appointmentHandlers } from './handlers/appointments';
 import { availabilityHandlers } from './handlers/availability';
 import { teamHandlers } from './handlers/team';
 import { settingsHandlers } from './handlers/settings';
+import { directoryHandlers } from './handlers/directory';
+
+/**
+ * With `VITE_AUTH_BACKEND=mysql` the auth routes are deliberately NOT mocked, so
+ * registration and login reach the real API in `server/` — Express writing to
+ * your local MySQL (Vite proxies `/api` there). Everything else stays mocked, so
+ * the rest of the demo UI keeps working unchanged.
+ *
+ * Without that flag the bundled admin account drives /api/auth/* as before.
+ */
+const useMysqlAuth = import.meta.env.VITE_AUTH_BACKEND === 'mysql';
 
 export const worker = setupWorker(
-  ...authHandlers,
+  ...(useMysqlAuth ? [] : authHandlers),
   ...caseHandlers,
   ...documentHandlers,
   ...inboxHandlers,
@@ -21,4 +32,5 @@ export const worker = setupWorker(
   ...availabilityHandlers,
   ...teamHandlers,
   ...settingsHandlers,
+  ...directoryHandlers,
 );

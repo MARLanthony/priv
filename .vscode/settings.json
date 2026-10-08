@@ -1,0 +1,24 @@
+{
+  // NOTE: this project deliberately does not pin the TypeScript version through
+  // workspace settings ("typescript.tsdk" / "typescript.enablePromptUseWorkspaceTsdk"),
+  // because VS Code flags those keys as unknown configuration settings in some builds.
+  // If editor diagnostics ever disagree with `npm run typecheck`, run
+  // "TypeScript: Select TypeScript Version…" → "Use Workspace Version" from the
+  // Command Palette (VS Code stores that choice in your user settings).
+
+  // Tailwind's at-rules (@tailwind/@apply) are processed by PostCSS, so the
+  // editor's CSS language service reports them as "Unknown at rule".
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  "less.lint.unknownAtRules": "ignore",
+
+  // Keep generated verification bundles out of search results and the explorer.
+  "search.exclude": {
+    "**/.smoke": true,
+    "**/dist": true
+  },
+  "files.exclude": {
+    "**/.smoke": true
+  },
+  "js/ts.tsdk.path": "node_modules\\typescript\\lib"
+}

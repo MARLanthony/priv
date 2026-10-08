@@ -1,8 +1,22 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { LegalAnalysisResult } from '../../ai';
 import { useNLPStore } from '../../stores/appStores';
 import { PageHeader, GlassCard } from '../../components/UI';
-import { ArrowLeft, Brain, BookOpen, User, Calendar, CheckCircle, Tag, Briefcase, ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowLeft, Brain, BookOpen, User, Calendar, CheckCircle, Tag, Briefcase, ArrowRight, Sparkles, ShieldCheck } from 'lucide-react';
+
+/** Badge shown for the provider that produced the analysis. */
+const SOURCE_META: Record<LegalAnalysisResult['source'], { label: string; className: string }> = {
+  openrouter: { label: 'Live AI', className: 'bg-success/10 text-success border-success/20' },
+  msw: { label: 'Demo Data', className: 'bg-info/10 text-info border-info/20' },
+  fallback: { label: 'Offline Mode', className: 'bg-warning/10 text-warning border-warning/20' },
+};
+
+const URGENCY_META: Record<LegalAnalysisResult['urgency'], { className: string; dot: string }> = {
+  High: { className: 'text-danger', dot: 'bg-danger' },
+  Medium: { className: 'text-warning', dot: 'bg-warning' },
+  Low: { className: 'text-success', dot: 'bg-success' },
+};
 
 export const SuggestionsResultsPage: React.FC = () => {
   const { result } = useNLPStore();
@@ -27,12 +41,18 @@ export const SuggestionsResultsPage: React.FC = () => {
 
       {/* Query Summary */}
       <GlassCard className="mb-6 bg-gradient-to-r from-gold/5 to-transparent border-gold/15">
-        <div className="flex items-start gap-3">
-          <Brain size={20} className="text-gold mt-0.5" />
-          <div>
-            <p className="text-xs text-gold font-semibold uppercase tracking-wider mb-1">Your Query</p>
-            <p className="text-sm text-text-secondary">{result.query}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <Brain size={20} className="text-gold mt-0.5" />
+            <div>
+              <p className="text-xs text-gold font-semibold uppercase tracking-wider mb-1">Your Query</p>
+              <p className="text-sm text-text-secondary">{result.query}</p>
+            </div>
           </div>
+          <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider border whitespace-nowrap ${SOURCE_META[result.source].className}`}>
+            {SOURCE_META[result.source].label}
+            {typeof result.latencyMs === 'number' ? ` · ${(result.latencyMs / 1000).toFixed(1)}s` : ''}
+          </span>
         </div>
       </GlassCard>
 
@@ -44,6 +64,10 @@ export const SuggestionsResultsPage: React.FC = () => {
             <h3 className="text-sm font-semibold text-white">Suggested Case Type</h3>
           </div>
           <p className="text-xl font-bold text-white mb-2">{result.suggestedCaseType}</p>
+          <p className={`flex items-center gap-1.5 text-xs font-semibold mb-3 ${URGENCY_META[result.urgency].className}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${URGENCY_META[result.urgency].dot}`} />
+            {result.urgency} urgency
+          </p>
           <div className="flex items-center gap-2">
             <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
               <div className="h-full bg-gradient-to-r from-gold to-gold-light rounded-full transition-all duration-1000" style={{ width: `${result.confidence}%` }} />
@@ -163,6 +187,28 @@ export const SuggestionsResultsPage: React.FC = () => {
           </div>
         </GlassCard>
       </div>
+
+      {/* Grounding: the facts the analysis was based on */}
+      {(result.keyFacts?.length ?? 0) > 0 && (
+        <GlassCard className="mt-6">
+          <div className="flex items-center gap-2 mb-1">
+            <ShieldCheck size={18} className="text-success" />
+            <h3 className="text-sm font-semibold text-white">Facts this analysis relied on</h3>
+          </div>
+          <p className="text-[11px] text-text-muted mb-4">
+            Taken from your description — review them for accuracy. Missing or wrong facts change the
+            recommendation.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {result.keyFacts!.map((fact, i) => (
+              <div key={i} className="flex items-start gap-2 p-2.5 rounded-lg bg-white/3">
+                <CheckCircle size={14} className="text-success flex-shrink-0 mt-0.5" />
+                <span className="text-sm text-text-secondary">{fact}</span>
+              </div>
+            ))}
+          </div>
+        </GlassCard>
+      )}
     </div>
   );
 };

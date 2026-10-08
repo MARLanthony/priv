@@ -27,6 +27,14 @@ export const settingsHandlers = [
     if (!user) return HttpResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
     const body = await request.json() as { currentPassword: string; newPassword: string };
+    // In MySQL auth mode the password lives in MySQL, not in this mock, so it
+    // cannot be verified here — say so rather than rejecting a correct password.
+    if (user.password === undefined) {
+      return HttpResponse.json(
+        { error: 'Password changes are handled by the account server.' },
+        { status: 400 },
+      );
+    }
     if (body.currentPassword !== user.password) {
       return HttpResponse.json({ error: 'Current password is incorrect' }, { status: 400 });
     }

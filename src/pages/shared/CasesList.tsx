@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { Case, CasePriority, CaseStatus } from '../../types';
 import { useCaseStore } from '../../stores/caseStore';
+import { useDirectoryStore } from '../../stores/directoryStore';
 import { PageHeader, StatusBadge, Modal, GlassCard } from '../../components/UI';
 import { Plus, Search, Trash2, Edit, Eye, Filter } from 'lucide-react';
 
@@ -11,15 +13,31 @@ interface CasesListProps {
   canEdit?: boolean;
 }
 
+/**
+ * A blank case. The people fields are filled from the firm directory — the
+ * dataset ships empty, so nothing may be pre-assigned to a demo attorney/client
+ * (see src/mocks/handlers/directory.ts).
+ */
+const emptyCase = (): Partial<Case> => ({
+  title: '', caseNumber: '', type: '', priority: 'medium', status: 'pending',
+  assignedToId: 0, clientId: 0, assignedToName: '', clientName: '',
+});
+
 export const CasesList: React.FC<CasesListProps> = ({ basePath, canCreate = false, canDelete = false, canEdit = false }) => {
   const { cases, fetchCases, deleteCase, createCase } = useCaseStore();
+  const { attorneys, clients, fetchAttorneys, fetchClients } = useDirectoryStore();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newCase, setNewCase] = useState({ title: '', caseNumber: '', type: '', priority: 'medium', status: 'pending', assignedToId: 2, clientId: 5, assignedToName: 'John Smith', clientName: 'Client A' });
+  const [newCase, setNewCase] = useState<Partial<Case>>(emptyCase());
   const navigate = useNavigate();
 
-  useEffect(() => { fetchCases(); }, []);
+  useEffect(() => {
+    fetchCases();
+    // Only the role that may open a case needs the pickers (and the directory is
+    // staff-only, so no other role calls it).
+    if (canCreate) { fetchAttorneys(); fetchClients(); }
+  }, []);
 
   const filtered = cases.filter(c => {
     const matchSearch = c.title.toLowerCase().includes(search.toLowerCase()) || c.caseNumber.toLowerCase().includes(search.toLowerCase());
@@ -27,10 +45,13 @@ export const CasesList: React.FC<CasesListProps> = ({ basePath, canCreate = fals
     return matchSearch && matchStatus;
   });
 
+  const canSubmit = Boolean(newCase.title?.trim() && newCase.assignedToId && newCase.clientId);
+
   const handleCreate = () => {
+    if (!canSubmit) return;
     createCase(newCase);
     setShowCreateModal(false);
-    setNewCase({ title: '', caseNumber: '', type: '', priority: 'medium', status: 'pending', assignedToId: 2, clientId: 5, assignedToName: 'John Smith', clientName: 'Client A' });
+    setNewCase(emptyCase());
   };
 
   return (
@@ -141,8 +162,44 @@ export const CasesList: React.FC<CasesListProps> = ({ basePath, canCreate = fals
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
+              <label className="text-sm text-text-secondary block mb-1">Assigned Attorney</label>
+              <select
+                value={newCase.assignedToId ?? 0}
+                onChange={e => {
+                  const attorney = attorneys.find(a => a.id === Number(e.target.value));
+                  setNewCase({ ...newCase, assignedToId: attorney?.id ?? 0, assignedToName: attorney?.name ?? '' });
+                }}
+                className="glass-input w-full px-4 py-2.5 text-sm"
+              >
+                <option value={0}>Select an attorney…</option>
+                {attorneys.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+              {attorneys.length === 0 && (
+                <p className="text-[11px] text-text-muted mt-1">No attorneys yet — add one in Team Management.</p>
+              )}
+            </div>
+            <div>
+              <label className="text-sm text-text-secondary block mb-1">Client</label>
+              <select
+                value={newCase.clientId ?? 0}
+                onChange={e => {
+                  const client = clients.find(c => c.id === Number(e.target.value));
+                  setNewCase({ ...newCase, clientId: client?.id ?? 0, clientName: client?.name ?? '' });
+                }}
+                className="glass-input w-full px-4 py-2.5 text-sm"
+              >
+                <option value={0}>Select a client…</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              {clients.length === 0 && (
+                <p className="text-[11px] text-text-muted mt-1">No clients yet — clients create their own account from sign-up.</p>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
               <label className="text-sm text-text-secondary block mb-1">Priority</label>
-              <select value={newCase.priority} onChange={e => setNewCase({...newCase, priority: e.target.value})} className="glass-input w-full px-4 py-2.5 text-sm">
+              <select value={newCase.priority} onChange={e => setNewCase({...newCase, priority: e.target.value as CasePriority})} className="glass-input w-full px-4 py-2.5 text-sm">
                 <option value="high">High</option>
                 <option value="medium">Medium</option>
                 <option value="low">Low</option>
@@ -150,7 +207,7 @@ export const CasesList: React.FC<CasesListProps> = ({ basePath, canCreate = fals
             </div>
             <div>
               <label className="text-sm text-text-secondary block mb-1">Status</label>
-              <select value={newCase.status} onChange={e => setNewCase({...newCase, status: e.target.value})} className="glass-input w-full px-4 py-2.5 text-sm">
+              <select value={newCase.status} onChange={e => setNewCase({...newCase, status: e.target.value as CaseStatus})} className="glass-input w-full px-4 py-2.5 text-sm">
                 <option value="pending">Pending</option>
                 <option value="active">Active</option>
                 <option value="discovery">Discovery</option>
@@ -159,7 +216,7 @@ export const CasesList: React.FC<CasesListProps> = ({ basePath, canCreate = fals
           </div>
           <div className="flex justify-end gap-3 mt-6">
             <button onClick={() => setShowCreateModal(false)} className="btn-secondary">Cancel</button>
-            <button onClick={handleCreate} className="btn-primary">Create Case</button>
+            <button onClick={handleCreate} disabled={!canSubmit} className="btn-primary disabled:opacity-50">Create Case</button>
           </div>
         </div>
       </Modal>

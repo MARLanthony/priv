@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useDocumentStore } from '../../stores/appStores';
+import { useCaseStore } from '../../stores/caseStore';
 import { PageHeader, GlassCard, Modal } from '../../components/UI';
 import { FileText, Upload, Trash2, Search, Download } from 'lucide-react';
 
@@ -10,18 +11,26 @@ interface DocumentsPageProps {
 
 export const DocumentsPage: React.FC<DocumentsPageProps> = ({ canDelete = false, canUpload = true }) => {
   const { documents, fetchDocuments, uploadDocument, deleteDocument } = useDocumentStore();
+  const { cases, fetchCases } = useCaseStore();
   const [search, setSearch] = useState('');
   const [showUpload, setShowUpload] = useState(false);
-  const [newDoc, setNewDoc] = useState({ name: '', type: 'PDF', size: '1.0 MB', caseId: 1, caseName: 'Terraform v. GreenVolt', category: 'Filing' });
 
-  useEffect(() => { fetchDocuments(); }, []);
+  // A document belongs to a real case: the dataset ships empty, so nothing may be
+  // pre-filled with a demo case name (see src/mocks/handlers/cases.ts).
+  const emptyDoc = () => ({ name: '', type: 'PDF', size: '1.0 MB', caseId: 0, caseName: '', category: 'Filing' });
+  const [newDoc, setNewDoc] = useState(emptyDoc());
+
+  useEffect(() => { fetchDocuments(); fetchCases(); }, []);
 
   const filtered = documents.filter(d => d.name.toLowerCase().includes(search.toLowerCase()));
 
+  const canUploadDoc = Boolean(newDoc.name.trim() && newDoc.caseId);
+
   const handleUpload = () => {
+    if (!canUploadDoc) return;
     uploadDocument(newDoc);
     setShowUpload(false);
-    setNewDoc({ name: '', type: 'PDF', size: '1.0 MB', caseId: 1, caseName: 'Terraform v. GreenVolt', category: 'Filing' });
+    setNewDoc(emptyDoc());
   };
 
   return (
@@ -52,7 +61,7 @@ export const DocumentsPage: React.FC<DocumentsPageProps> = ({ canDelete = false,
               <div>
                 <p className="text-sm font-medium text-white">{doc.name}</p>
                 <p className="text-xs text-text-muted">{doc.size} · {doc.type} · {doc.category}</p>
-                <p className="text-xs text-text-muted">Case: {doc.caseName} · Uploaded by {doc.uploadedByName} on {doc.uploadedAt}</p>
+                <p className="text-xs text-text-muted">Case: {doc.caseName || '—'} · Uploaded by {doc.uploadedByName} on {doc.uploadedAt}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -79,6 +88,23 @@ export const DocumentsPage: React.FC<DocumentsPageProps> = ({ canDelete = false,
             <label className="text-sm text-text-secondary block mb-1">Document Name</label>
             <input value={newDoc.name} onChange={e => setNewDoc({...newDoc, name: e.target.value})} className="glass-input w-full px-4 py-2.5 text-sm" placeholder="Document name" />
           </div>
+          <div>
+            <label className="text-sm text-text-secondary block mb-1">Case</label>
+            <select
+              value={newDoc.caseId}
+              onChange={e => {
+                const linkedCase = cases.find(c => c.id === Number(e.target.value));
+                setNewDoc({ ...newDoc, caseId: linkedCase?.id ?? 0, caseName: linkedCase?.title ?? '' });
+              }}
+              className="glass-input w-full px-4 py-2.5 text-sm"
+            >
+              <option value={0}>Select a case…</option>
+              {cases.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+            </select>
+            {cases.length === 0 && (
+              <p className="text-[11px] text-text-muted mt-1">No cases yet — open one first in Cases.</p>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm text-text-secondary block mb-1">Category</label>
@@ -100,7 +126,7 @@ export const DocumentsPage: React.FC<DocumentsPageProps> = ({ canDelete = false,
           </div>
           <div className="flex justify-end gap-3 mt-4">
             <button onClick={() => setShowUpload(false)} className="btn-secondary">Cancel</button>
-            <button onClick={handleUpload} className="btn-primary">Upload</button>
+            <button onClick={handleUpload} disabled={!canUploadDoc} className="btn-primary disabled:opacity-50">Upload</button>
           </div>
         </div>
       </Modal>

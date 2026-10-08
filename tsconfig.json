@@ -21,5 +21,12 @@
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src"]
+  /*
+   * `tests/` holds the verification suites (ai-smoke, ai-live-path, ai-accuracy,
+   * auth-test, auth-msw-test, modal-test) and is listed so the editor and `tsc`
+   * type-check them with the SAME options as the app (jsx, DOM lib, bundler
+   * resolution). Without this the editor falls back to an inferred project and
+   * falsely reports "Cannot use JSX unless the '--jsx' flag is provided".
+   */
+  "include": ["src", "tests", "vite.config.ts"]
 }

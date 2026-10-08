@@ -11,10 +11,23 @@ node_modules
 dist
 dist-ssr
 *.local
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Verification-suite build output
+.smoke
+
+# Environment variables (keep .env.example committed)
+.env
+.env.*
+!.env.example
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea
 .DS_Store
 *.suo

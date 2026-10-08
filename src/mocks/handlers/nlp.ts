@@ -31,7 +31,7 @@ export const nlpHandlers = [
     // Find recommended attorney
     const recommendedAttorneyName = matchedArticles.length > 0
       ? matchedArticles[0].attorneySpecialist
-      : 'John Smith, Esq.';
+      : 'Intake Team';
 
     // Generate available slots
     const today = new Date();

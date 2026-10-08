@@ -102,7 +102,7 @@ export const Sidebar: React.FC = () => {
         </div>
         {sidebarOpen && (
           <div className="animate-fade-in">
-            <h1 className="text-lg font-bold text-white tracking-tight">LegalFlow</h1>
+            <h1 className="text-lg font-bold text-white tracking-tight">JurisFlow</h1>
             <p className="text-[10px] text-text-muted uppercase tracking-widest">Legal Platform</p>
           </div>
         )}

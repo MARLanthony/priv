@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAppointmentStore } from '../../stores/appStores';
+import { useDirectoryStore } from '../../stores/directoryStore';
+import { useAuthStore } from '../../stores/authStore';
 import { PageHeader, GlassCard, StatusBadge, Modal } from '../../components/UI';
 import { Calendar, Clock, MapPin, Plus, Trash2, Search } from 'lucide-react';
 
@@ -10,11 +12,38 @@ interface AppointmentsPageProps {
 
 export const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ canCreate = true, canDelete = true }) => {
   const { appointments, fetchAppointments, createAppointment, deleteAppointment } = useAppointmentStore();
+  const { user } = useAuthStore();
+  const { attorneys, clients, fetchAttorneys, fetchClients } = useDirectoryStore();
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
-  const [newAppt, setNewAppt] = useState({ title: '', clientId: 5, clientName: 'Client A', attorneyId: 2, attorneyName: 'John Smith', date: '', time: '10:00', duration: 60, type: 'consultation' as const, notes: '', location: 'Conference Room A' });
 
-  useEffect(() => { fetchAppointments(); }, []);
+  /*
+   * The dataset ships with no people, so the two parties are always read from the
+   * firm directory instead of a demo attorney/client (see
+   * src/mocks/handlers/directory.ts): an attorney books on their own diary, a
+   * client books with a real attorney, the admin/secretary pick both.
+   */
+  const isAttorney = user?.role === 'attorney';
+  const isClient = user?.role === 'user';
+
+  const [newAppt, setNewAppt] = useState(() => ({
+    title: '',
+    clientId: isClient ? (user?.id ?? 0) : 0,
+    clientName: isClient ? (user?.name ?? '') : '',
+    attorneyId: isAttorney ? (user?.id ?? 0) : 0,
+    attorneyName: isAttorney ? (user?.name ?? '') : '',
+    date: '', time: '10:00', duration: 60, type: 'consultation' as const, notes: '', location: 'Conference Room A',
+  }));
+
+  useEffect(() => {
+    fetchAppointments();
+    if (canCreate) {
+      fetchAttorneys();
+      if (!isClient) fetchClients();
+    }
+  }, []);
+
+  const canSubmitAppt = Boolean(newAppt.title.trim() && newAppt.date && newAppt.attorneyId && newAppt.clientId);
 
   const filtered = appointments.filter(a => a.title.toLowerCase().includes(search.toLowerCase()) || a.clientName.toLowerCase().includes(search.toLowerCase()));
   const upcoming = filtered.filter(a => a.status === 'scheduled').sort((a, b) => a.date.localeCompare(b.date));
@@ -106,6 +135,54 @@ export const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ canCreate = 
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
+              <label className="text-sm text-text-secondary block mb-1">Attorney</label>
+              {isAttorney ? (
+                <input value={newAppt.attorneyName} readOnly className="glass-input w-full px-4 py-2.5 text-sm opacity-70" />
+              ) : (
+                <>
+                  <select
+                    value={newAppt.attorneyId}
+                    onChange={e => {
+                      const attorney = attorneys.find(a => a.id === Number(e.target.value));
+                      setNewAppt({ ...newAppt, attorneyId: attorney?.id ?? 0, attorneyName: attorney?.name ?? '' });
+                    }}
+                    className="glass-input w-full px-4 py-2.5 text-sm"
+                  >
+                    <option value={0}>Select an attorney…</option>
+                    {attorneys.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                  {attorneys.length === 0 && (
+                    <p className="text-[11px] text-text-muted mt-1">No attorneys yet — add one in Team Management.</p>
+                  )}
+                </>
+              )}
+            </div>
+            <div>
+              <label className="text-sm text-text-secondary block mb-1">Client</label>
+              {isClient ? (
+                <input value={newAppt.clientName} readOnly className="glass-input w-full px-4 py-2.5 text-sm opacity-70" />
+              ) : (
+                <>
+                  <select
+                    value={newAppt.clientId}
+                    onChange={e => {
+                      const client = clients.find(c => c.id === Number(e.target.value));
+                      setNewAppt({ ...newAppt, clientId: client?.id ?? 0, clientName: client?.name ?? '' });
+                    }}
+                    className="glass-input w-full px-4 py-2.5 text-sm"
+                  >
+                    <option value={0}>Select a client…</option>
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  {clients.length === 0 && (
+                    <p className="text-[11px] text-text-muted mt-1">No clients yet — clients create their own account from sign-up.</p>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
               <label className="text-sm text-text-secondary block mb-1">Date</label>
               <input type="date" value={newAppt.date} onChange={e => setNewAppt({...newAppt, date: e.target.value})} className="glass-input w-full px-4 py-2.5 text-sm" />
             </div>
@@ -135,7 +212,7 @@ export const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ canCreate = 
           </div>
           <div className="flex justify-end gap-3 mt-4">
             <button onClick={() => setShowCreate(false)} className="btn-secondary">Cancel</button>
-            <button onClick={() => { createAppointment(newAppt); setShowCreate(false); }} className="btn-primary">Schedule</button>
+            <button onClick={() => { if (!canSubmitAppt) return; createAppointment(newAppt); setShowCreate(false); }} disabled={!canSubmitAppt} className="btn-primary disabled:opacity-50">Schedule</button>
           </div>
         </div>
       </Modal>

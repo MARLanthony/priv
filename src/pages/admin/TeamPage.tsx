@@ -133,6 +133,11 @@ export const TeamPage: React.FC = () => {
             <label className="text-sm text-text-secondary block mb-1">Phone</label>
             <input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="glass-input w-full px-4 py-2.5 text-sm" placeholder="Phone number" />
           </div>
+          <p className="text-[11px] text-text-muted leading-relaxed">
+            Saving creates this member&apos;s sign-in account with the default password{' '}
+            <span className="text-gold font-medium">password123</span>. They can change it in
+            Settings, and they sign in with the email above.
+          </p>
           <div className="flex justify-end gap-3 mt-4">
             <button onClick={() => { setShowAdd(false); setEditId(null); }} className="btn-secondary">Cancel</button>
             <button onClick={handleSubmit} className="btn-primary">{editId ? 'Save Changes' : 'Add Member'}</button>

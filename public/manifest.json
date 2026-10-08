@@ -1,6 +1,6 @@
 {
-  "name": "LegalFlow",
-  "short_name": "LegalFlow",
+  "name": "JurisFlow",
+  "short_name": "JurisFlow",
   "description": "Legal Advice & Consultation Platform",
   "start_url": "/",
   "display": "standalone",
