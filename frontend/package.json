@@ -1,0 +1,38 @@
+{
+  "name": "jurisflow-frontend",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "description": "JurisFlow — legal advice & consultation platform (React + Vite client for the Flask API)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview --port 4173"
+  },
+  "dependencies": {
+    "framer-motion": "^13.4.2",
+    "lucide-react": "^1.45.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.3",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.6.0",
+    "msw": "^2.15.0",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^6.0.3",
+    "vite": "^5.4.21"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
+  }
+}

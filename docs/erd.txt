@@ -1,0 +1,117 @@
+================================================================================
+JURISFLOW - ENTITY RELATIONSHIP DIAGRAM  (PostgreSQL / Supabase)
+================================================================================
+PK = primary key   FK = foreign key   U = unique   N = nullable
+================================================================================
+
+        +------------------------------------------------------------+
+        |                          users                             |
+        |  id PK | name | email U | password_hash | role | is_active   |
+        +------------------------------------------------------------+
+          | 1                 | 1                    | 1        | 1
+          |                   |                      |          |
+   (owns) |            (leads matters)        (diary) |    (audit) |
+          | 1                 | N                    | N        | N
+          v                   v                      v          v
+   +--------------+    +--------------+      +---------------+  +----------------+
+   |   clients    |    |    cases     |      | appointments  |  |  activity_logs |
+   | id PK        |    | id PK        |      | id PK         |  | id PK          |
+   | user_id FK U |    | client_id FK |<---- | client_id FK  |  | user_id FK N   |
+   | full_name    |    | case_number U|      | lawyer_id FK  |  | action         |
+   | contact      |    | assigned_    |      | consultation_ |  | details        |
+   | address      |    |  lawyer_id FK|      |   id FK N     |  | ip_address     |
+   +--------------+    | status       |      | date          |  +----------------+
+     |    |    |        | priority     |      | start/end_time|
+     |    |    |        +--------------+      | status        |
+     |    |    |             | 1            +---------------+
+     |    |    |             | N                  ^ 1
+     |    |    |        +--------------+          | N
+     |    |    |        |  documents   |          | (a booking fulfils an
+     |    |    |        | id PK        |          |  approved request)
+     |    |    |        | client_id FK |     +--------------------+
+     |    |    |        | case_id FK N |     |   consultations    |
+     |    |    |        | name         |     | id PK              |
+     |    |    |        | storage_path |     | client_id FK       |
+     |    |    |        | status       |     | service_id FK N    |
+     |    |    |        +--------------+     | concern            |
+     |    |    |              | 1            | status             |
+     |    |    |              | 1 (newest)   | reviewed_by FK N   |
+     |    |    |              v              +--------------------+
+     |    |    |        +--------------+            ^ N
+     |    |    |        | nlp_results  |            | 1
+     |    |    |        | id PK        |     +--------------------+
+     |    |    |        | document_id  |     |  legal_services    |
+     |    |    |        |  FK N cascade|     | id PK              |
+     |    |    |        | client_id FK N|    | name U             |
+     |    |    |        | kind         |     | is_active          |
+     |    |    |        | classification|    +--------------------+
+     |    |    |        | urgency      |
+     |    |    |        | result jsonb |
+     |    |    |        +--------------+
+     |    |    |
+     |    |    +--------------------- (client_id) -----> appointments, documents
+     |    |
+     |    +-------------------------- (client_id) -----> consultations
+     |
+     +------------------------------- (user_id) -------> notifications,
+                                                        notification_settings
+
+   +-----------------------+        +--------------------------------+
+   |  knowledge_articles   |        |            faqs                |
+   | id PK                 |        | id PK                          |
+   | title, category       |        | question, answer, category     |
+   | keywords text[]  (GIN)|        | created_by FK N                |
+   | services_needed text[]|        +--------------------------------+
+   | status (published/    |
+   |   draft)              |        +--------------------------------+
+   | match_count           |        |         permissions            |
+   | search_document       |        | code PK | label | group_label  |
+   |   tsvector (generated)|        +--------------------------------+
+   +-----------------------+                 ^ N
+   (grounds the AI; no FK -                |  (per role)
+    matched by keywords at          +------------------------+
+    request time)                   |    role_permissions    |
+                                    | id PK                  |
+                                    | role | permission FK   |
+                                    | U (role, permission)   |
+                                    +------------------------+
+
+   +------------------------------+
+   |     availability             |   One row per lawyer per weekday.
+   | id PK | lawyer_id FK         |   Backs free_slots(lawyer_id, date).
+   | day_of_week | start/end_time |   U (lawyer_id, day_of_week)
+   | is_available                 |
+   +------------------------------+
+
+================================================================================
+RELATIONSHIPS
+--------------------------------------------------------------------------------
+  users(1) ── clients(1)                a client login owns one client file
+  users(1) ── cases(N)                  assigned_lawyer_id (the lead attorney)
+  users(1) ── appointments(N)           whose diary the booking sits in
+  users(1) ── availability(7)           the weekly grid
+  users(1) ── notifications(N)          the inbox
+  users(1) ── notification_settings(1)  preferences
+  users(N) ── permissions(N)            through role_permissions, by role
+  clients(1) ── cases(N)                matters, cascade
+  clients(1) ── consultations(N)        intake, cascade
+  clients(1) ── appointments(N)         bookings, cascade
+  clients(1) ── documents(N)            uploads, cascade
+  cases(1) ── documents(N)              case_id, ON DELETE SET NULL
+  consultations(1) ── appointments(N)   consultation_id, ON DELETE SET NULL
+  documents(1) ── nlp_results(1)        newest analysis per document wins
+  legal_services(1) ── consultations(N) service_id, ON DELETE SET NULL
+
+================================================================================
+KEY CONSTRAINTS
+--------------------------------------------------------------------------------
+  users.email                     UNIQUE (citext)      one account per address
+  clients.user_id                 UNIQUE               one file per login
+  cases.case_number               UNIQUE               JF-2026-1001 …
+  availability (lawyer_id, day)   UNIQUE               one row per weekday
+  role_permissions (role, perm)   UNIQUE               one grant per pair
+  appointments_no_overlap         EXCLUDE USING gist   no double-booking
+  appointments_time_order         CHECK end > start
+  consultations.concern           CHECK length >= 20
+  users.role / statuses / kinds   CHECK (in list)      controlled vocabularies
+================================================================================

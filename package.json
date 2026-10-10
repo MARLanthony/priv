@@ -1,57 +1,22 @@
 {
-  "name": "priv-attorney",
+  "name": "jurisflow",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "version": "2.0.0",
+  "description": "JurisFlow - legal advice & consultation platform. Root launcher: every script delegates to frontend/ (React+Vite) or backend/ (Flask).",
+  "comment": "This file has no dependencies on purpose - it only exists so `npm run dev` works from the repository root as well as from frontend/. The real app manifest is frontend/package.json.",
   "scripts": {
-    "dev": "vite",
-    "predev": "node scripts/check-env.mjs",
-    "api": "python -m server",
-    "db:setup": "node --env-file-if-exists=.env server/setup.mjs",
-    "db:users": "node --env-file-if-exists=.env server/users.mjs",
-    "build": "tsc && vite build",
-    "prebuild": "node scripts/check-env.mjs",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
-    "env:check": "node scripts/check-env.mjs",
-    "env:key": "node scripts/env-key.mjs",
-    "test:ai": "node node_modules/esbuild/bin/esbuild tests/ai-smoke.ts --bundle --format=esm --platform=node --outfile=.smoke/ai-smoke.mjs --log-level=warning && node .smoke/ai-smoke.mjs",
-    "test:ai-key": "node node_modules/esbuild/bin/esbuild tests/ai-key-test.tsx --bundle --format=cjs --platform=node --jsx=automatic --outfile=.smoke/ai-key.cjs --log-level=warning && node .smoke/ai-key.cjs",
-    "test:live-path": "node node_modules/esbuild/bin/esbuild tests/ai-live-path.ts --bundle --format=esm --platform=node --outfile=.smoke/ai-live-path.mjs --log-level=warning && node .smoke/ai-live-path.mjs",
-    "test:modal": "node node_modules/esbuild/bin/esbuild tests/modal-test.tsx --bundle --format=cjs --platform=node --jsx=automatic --outfile=.smoke/modal.cjs --log-level=warning && node .smoke/modal.cjs",
-    "test:auth": "node node_modules/esbuild/bin/esbuild tests/auth-test.tsx --bundle --format=cjs --platform=node --jsx=automatic --outfile=.smoke/auth.cjs --log-level=warning && node .smoke/auth.cjs",
-    "test:auth:msw": "node node_modules/esbuild/bin/esbuild tests/auth-msw-test.ts --bundle --format=esm --platform=node --outfile=.smoke/auth-msw.mjs --log-level=warning && node .smoke/auth-msw.mjs",
-    "test:auth:mysql": "node node_modules/esbuild/bin/esbuild tests/auth-mysql-test.ts --bundle --format=esm --platform=node --external:mysql2 --outfile=.smoke/auth-mysql.mjs --log-level=warning && node .smoke/auth-mysql.mjs",
-    "test:accuracy": "node node_modules/esbuild/bin/esbuild tests/ai-accuracy.ts --bundle --format=esm --platform=node --outfile=.smoke/ai-accuracy.mjs --log-level=warning && node .smoke/ai-accuracy.mjs",
-    "test:theme": "node node_modules/esbuild/bin/esbuild tests/theme-test.tsx --bundle --format=cjs --platform=node --jsx=automatic --outfile=.smoke/theme.cjs --log-level=warning && node .smoke/theme.cjs",
-    "test:landing": "node node_modules/esbuild/bin/esbuild tests/landing-test.tsx --bundle --format=cjs --platform=node --jsx=automatic --outfile=.smoke/landing.cjs --log-level=warning && node .smoke/landing.cjs",
-    "test": "npm run typecheck && npm run test:ai && npm run test:ai-key && npm run test:live-path && npm run test:modal && npm run test:theme && npm run test:landing && npm run test:auth && npm run test:auth:msw && npm run test:auth:mysql"
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "typecheck": "cd frontend && npm run typecheck",
+    "preview": "cd frontend && npm run preview",
+    "install:web": "cd frontend && npm install",
+    "install:api": "python -m pip install -r backend/requirements.txt",
+    "setup": "npm run install:web && npm run install:api",
+    "api": "cd backend && python wsgi.py",
+    "check:api": "python -m compileall backend",
+    "check:web": "cd frontend && npm run typecheck"
   },
-  "devDependencies": {
-    "@tailwindcss/vite": "^4.3.3",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "autoprefixer": "^10.6.0",
-    "postcss": "^8.5.28",
-    "tailwindcss": "^3.4.19",
-    "typescript": "~6.0.2",
-    "vite": "^5.4.21"
-  },
-  "dependencies": {
-    "@vitejs/plugin-react": "^4.7.0",
-    "express": "^5.2.1",
-    "framer-motion": "^13.4.2",
-    "lucide-react": "^1.45.0",
-    "msw": "^2.15.0",
-    "mysql2": "^3.24.4",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "react-router-dom": "^7.18.3",
-    "zustand": "^5.0.15"
-  },
-  "msw": {
-    "workerDirectory": [
-      "public"
-    ]
+  "engines": {
+    "node": ">=20"
   }
 }

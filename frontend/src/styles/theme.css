@@ -1,0 +1,145 @@
+/* ==========================================================================
+   Themes — Normal (default) / Dark / Light
+   --------------------------------------------------------------------------
+   Every surface is expressed as a CSS variable so a single `data-theme`
+   attribute on <html> re-skins the whole app. `--contrast-rgb` is the key
+   token: Tailwind's `white` palette entry maps to it, which means utilities
+   such as `text-white`, `bg-white/5` and `border-white/10` flip automatically
+   from light-on-dark to dark-on-light.
+   ========================================================================== */
+
+/* Normal — the original JurisFlow navy + gold look */
+:root,
+[data-theme='normal'] {
+  --app-bg: linear-gradient(135deg, #0a1220 0%, #0f1a2e 40%, #162240 100%);
+  --contrast-rgb: 255 255 255;
+  --text-secondary-rgb: 176 196 222;
+  --text-muted-rgb: 107 130 166;
+
+  --glass-bg: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-light-bg: rgba(255, 255, 255, 0.05);
+  --glass-light-border: rgba(255, 255, 255, 0.08);
+  --glass-strong-bg: rgba(255, 255, 255, 0.12);
+  --glass-strong-border: rgba(255, 255, 255, 0.18);
+
+  --surface-sidebar: rgba(15, 26, 46, 0.85);
+  --surface-navbar: rgba(15, 26, 46, 0.7);
+  --divider: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+
+  --input-bg: rgba(255, 255, 255, 0.05);
+  --input-border: rgba(255, 255, 255, 0.1);
+  --input-text: #ffffff;
+  --input-placeholder: #6b82a6;
+  --input-focus-bg: rgba(255, 255, 255, 0.08);
+
+  --btn-secondary-bg: rgba(255, 255, 255, 0.08);
+  --btn-secondary-bg-hover: rgba(255, 255, 255, 0.15);
+  --btn-secondary-border: rgba(255, 255, 255, 0.12);
+  --btn-secondary-border-hover: rgba(255, 255, 255, 0.2);
+  --btn-secondary-text: #ffffff;
+
+  --scrim: rgba(0, 0, 0, 0.6);
+  --table-head-bg: rgba(255, 255, 255, 0.05);
+  --table-head-text: #b0c4de;
+  --table-row-hover: rgba(255, 255, 255, 0.04);
+
+  --scrollbar-thumb: rgba(255, 255, 255, 0.12);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+  --shimmer-from: rgba(255, 255, 255, 0.03);
+  --shimmer-mid: rgba(255, 255, 255, 0.08);
+
+  --brand-panel: linear-gradient(135deg, #0f1a2e 0%, #1a3a5c 100%);
+  --theme-color: #0f1a2e;
+}
+
+/* Dark — deeper, neutral charcoal for low-light work */
+[data-theme='dark'] {
+  --app-bg: linear-gradient(135deg, #05070c 0%, #0a0e16 45%, #111725 100%);
+  --contrast-rgb: 244 246 250;
+  --text-secondary-rgb: 154 167 189;
+  --text-muted-rgb: 110 122 143;
+
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --glass-light-bg: rgba(255, 255, 255, 0.03);
+  --glass-light-border: rgba(255, 255, 255, 0.06);
+  --glass-strong-bg: rgba(255, 255, 255, 0.08);
+  --glass-strong-border: rgba(255, 255, 255, 0.13);
+
+  --surface-sidebar: rgba(6, 9, 14, 0.9);
+  --surface-navbar: rgba(6, 9, 14, 0.78);
+  --divider: rgba(255, 255, 255, 0.06);
+  --border-subtle: rgba(255, 255, 255, 0.03);
+
+  --input-bg: rgba(255, 255, 255, 0.04);
+  --input-border: rgba(255, 255, 255, 0.08);
+  --input-text: #f4f6fa;
+  --input-placeholder: #6e7a8f;
+  --input-focus-bg: rgba(255, 255, 255, 0.07);
+
+  --btn-secondary-bg: rgba(255, 255, 255, 0.06);
+  --btn-secondary-bg-hover: rgba(255, 255, 255, 0.12);
+  --btn-secondary-border: rgba(255, 255, 255, 0.09);
+  --btn-secondary-border-hover: rgba(255, 255, 255, 0.16);
+  --btn-secondary-text: #f4f6fa;
+
+  --scrim: rgba(0, 0, 0, 0.72);
+  --table-head-bg: rgba(255, 255, 255, 0.04);
+  --table-head-text: #9aa7bd;
+  --table-row-hover: rgba(255, 255, 255, 0.03);
+
+  --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.18);
+  --shimmer-from: rgba(255, 255, 255, 0.02);
+  --shimmer-mid: rgba(255, 255, 255, 0.06);
+
+  --brand-panel: linear-gradient(135deg, #05070c 0%, #141a28 100%);
+  --theme-color: #05070c;
+}
+
+/* Light — paper-white surfaces with navy text and the same gold accent */
+[data-theme='light'] {
+  --app-bg: linear-gradient(135deg, #f7f9fc 0%, #eef2f9 45%, #e4ebf5 100%);
+  --contrast-rgb: 15 26 46;
+  --text-secondary-rgb: 71 89 117;
+  --text-muted-rgb: 121 137 161;
+
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(15, 26, 46, 0.1);
+  --glass-light-bg: rgba(255, 255, 255, 0.6);
+  --glass-light-border: rgba(15, 26, 46, 0.07);
+  --glass-strong-bg: rgba(255, 255, 255, 0.86);
+  --glass-strong-border: rgba(15, 26, 46, 0.12);
+
+  --surface-sidebar: rgba(255, 255, 255, 0.92);
+  --surface-navbar: rgba(255, 255, 255, 0.85);
+  --divider: rgba(15, 26, 46, 0.1);
+  --border-subtle: rgba(15, 26, 46, 0.06);
+
+  --input-bg: rgba(255, 255, 255, 0.9);
+  --input-border: rgba(15, 26, 46, 0.16);
+  --input-text: #0f1a2e;
+  --input-placeholder: #8896ad;
+  --input-focus-bg: #ffffff;
+
+  --btn-secondary-bg: rgba(15, 26, 46, 0.06);
+  --btn-secondary-bg-hover: rgba(15, 26, 46, 0.11);
+  --btn-secondary-border: rgba(15, 26, 46, 0.12);
+  --btn-secondary-border-hover: rgba(15, 26, 46, 0.22);
+  --btn-secondary-text: #16233c;
+
+  --scrim: rgba(15, 26, 46, 0.45);
+  --table-head-bg: rgba(15, 26, 46, 0.04);
+  --table-head-text: #475975;
+  --table-row-hover: rgba(15, 26, 46, 0.035);
+
+  --scrollbar-thumb: rgba(15, 26, 46, 0.18);
+  --scrollbar-thumb-hover: rgba(15, 26, 46, 0.3);
+  --shimmer-from: rgba(15, 26, 46, 0.04);
+  --shimmer-mid: rgba(15, 26, 46, 0.09);
+
+  --brand-panel: linear-gradient(135deg, #0f1a2e 0%, #24476d 100%);
+  --theme-color: #eef2f9;
+}

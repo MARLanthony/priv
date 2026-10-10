@@ -1,0 +1,88 @@
+"""Utility package — re-exported so blueprints can import from one place.
+
+    from app.utils import auth_required, ok, body_of, role_has_permission
+"""
+
+from app.utils.decorators import (  # noqa: F401
+    auth_required,
+    client_record,
+    current_user,
+    notify,
+    permission_required,
+    record_activity,
+    role_required,
+    scoped_client_id,
+)
+from app.utils.rbac import (  # noqa: F401
+    PERMISSIONS,
+    ROLE_PERMISSIONS,
+    ROLES,
+    load_role_permissions,
+    permissions_for,
+    role_has_any,
+    role_has_permission,
+)
+from app.utils.responses import (  # noqa: F401
+    as_bool,
+    as_int,
+    as_list,
+    bad_request,
+    body_of,
+    clean,
+    conflict,
+    created,
+    error,
+    forbidden,
+    join_columns,
+    missing,
+    no_content,
+    not_found,
+    ok,
+    unauthorized,
+)
+from app.utils.security import (  # noqa: F401
+    bearer_token,
+    decode_token,
+    hash_password,
+    issue_token,
+    verify_password,
+)
+
+__all__ = [
+    "auth_required",
+    "client_record",
+    "current_user",
+    "notify",
+    "permission_required",
+    "record_activity",
+    "role_required",
+    "scoped_client_id",
+    "PERMISSIONS",
+    "ROLE_PERMISSIONS",
+    "ROLES",
+    "load_role_permissions",
+    "permissions_for",
+    "role_has_any",
+    "role_has_permission",
+    "as_bool",
+    "as_int",
+    "as_list",
+    "bad_request",
+    "body_of",
+    "clean",
+    "conflict",
+    "created",
+    "error",
+    "forbidden",
+    "join_columns",
+    "missing",
+    "no_content",
+    "not_found",
+    "ok",
+    "unauthorized",
+    "bearer_token",
+    "decode_token",
+    "hash_password",
+    "issue_token",
+    "verify_password",
+]

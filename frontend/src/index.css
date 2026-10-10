@@ -1,0 +1,2 @@
+/* The app imports this file; the actual design system lives in ./styles/. */
+@import './styles/index.css';

@@ -35,3 +35,10 @@ venv/
 *.njsproj
 *.sln
 *.sw?
+
+# Local-only snapshots and archives (kept on disk, never pushed)
+_old/
+old.tar
+*.tar
+*.tar.gz
+*.zip

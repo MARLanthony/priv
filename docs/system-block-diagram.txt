@@ -1,3 +1,101 @@
+================================================================================
+JURISFLOW - SYSTEM BLOCK DIAGRAM
+================================================================================
+Layers, from the browser to the database, and the contracts that connect them.
+================================================================================
+
+                           +---------------------------+
+                           |        BROWSER            |
+                           |  React 19 + Vite + TS     |
+                           +---------------------------+
+                                      |
+   +----------------------------------+----------------------------------+
+   |                                  |                                  |
+   v                                  v                                  v
++---------------------+   +----------------------+   +----------------------+
+|  PAGES              |   |  STORES (zustand)    |   |  AI LAYER            |
+|  /admin /lawyer     |   |  auth, case,         |   |  ai/index.ts         |
+|  /staff /client     |   |  consultation,       |   |   analyzeLegalProblem|
+|                     |   |  appointment,        |   |   analyzeDocument    |
+|  workbenches:       |   |  document,           |   |   generateEmailReply |
+|   Cases             |   |  notification,       |   |   (+ local fallback) |
+|   Consultations     |   |  directory, theme,   |   +----------+-----------+
+|   Appointments      |   |  ui (toasts)         |              |
+|   Documents         |   +----------+-----------+              |
+|   Clients, Team     |              |                          |
+|   Knowledge,        |              |                          |
+|   Services, FAQs    |              |                          |
+|   Settings          |              |                          |
++----------+----------+              |                          |
+           |                         |                          |
+           +-------------+-----------+--------------------------+
+                         |
+                         v
+              +---------------------------+
+              |  SERVICES (typed fetch)   |
+              |  apiClient -> /api/*      |
+              |  bearer token + errors    |
+              +------------+--------------+
+                           |
+             +-------------+--------------+
+             |                            |
+             v                            v
+   +--------------------+        +----------------------+
+   |  MSW DEMO API      |        |  FLASK API           |
+   |  mocks/handlers/*  |        |  backend/app/*       |
+   |  in-memory db      |        |  blueprints (14)     |
+   |  VITE_USE_MOCKS    |        |  utils/rbac.py       |
+   +--------------------+        |  decorators: auth,   |
+     no server needed            |   permission         |
+                                 +----+--------+--------+
+                                      |        |
+                    +-----------------+        +------------------+
+                    v                                             v
+        +------------------------+                    +-----------------------+
+        |  POSTGRES (Supabase)   |                    |  OPENROUTER (AI)      |
+        |  12 migrations          |                    |  /chat/completions    |
+        |  10 seeders             |                    |  key server-side only |
+        |  triggers, constraints  |                    |  JSON mode + fallback |
+        |  RLS policies           |                    +-----------------------+
+        +-----------+------------+
+                    |
+                    v
+        +------------------------+
+        |  STORAGE (Supabase)    |
+        |  private bucket        |
+        |  `documents`           |
+        |  signed URLs, 25 MB    |
+        +------------------------+
+
+
+DATA MODEL (1 line per relationship; see docs/data-dictionary.md)
+--------------------------------------------------------------------------------
+  users 1---1 clients              (a client login owns one client file)
+  clients 1---N cases              (matters)
+  clients 1---N consultations      (intake requests)
+  clients 1---N appointments       (bookings)
+  clients 1---N documents          (uploads)
+  users(lawyer) 1---N cases        (assigned_lawyer_id, the lead attorney)
+  users(lawyer) 1---N appointments (the diary)
+  users(lawyer) 1---7 availability (weekly grid, one row per day)
+  cases 1---N documents            (case_id, optional)
+  cases 1---N appointments         (via consultation_id)
+  consultations 1---N appointments (a booking hangs off an approved request)
+  documents 1---1 nlp_results      (newest analysis wins)
+  users 1---N notifications        (the inbox)
+  users 1---1 notification_settings
+  users N---N permissions          (through role_permissions, per role)
+  users 1---N activity_logs        (audit trail)
+  legal_services 1---N consultations (practice area, ON DELETE SET NULL)
+
+CONTRACTS
+--------------------------------------------------------------------------------
+  Service module  <->  blueprint        one file each, same names
+  TypeScript type <->  table + view     types/index.ts mirrors the SQL columns
+  ROLE_PERMISSIONS (TS)  ==  rbac.py  ==  seeders/002_role_permissions.sql
+  Error contract:  { "error": string, "status": number } + the HTTP status
+================================================================================
+
 ╔══════════════════════════════════════════════════════════════════════════╗
 ║                    JurisFlow — SYSTEM BLOCK DIAGRAM                      ║
 ║            Frontend-only React application · MSW mock API                ║

@@ -1,3 +1,170 @@
+================================================================================
+JURISFLOW - SYSTEM FLOWCHART
+================================================================================
+Four roles, one pipeline. The diagram below is the *runtime* flow: who creates a
+record, who moves it, who reads it, and which API call each step performs.
+================================================================================
+
+
+0. BOOT
+--------------------------------------------------------------------------------
+  browser
+    |
+    |  main.tsx
+    |   1. initTheme()             apply the saved palette before first paint
+    |   2. await startMockApi()     MSW when VITE_USE_MOCKS != false
+    |   3. await loadSession()      GET /auth/me when a token is stored
+    v
+  App.tsx  ---->  "/" LandingPage | "/login" Login | "/signup" SignUp
+        |
+        |  ProtectedRoute (session)  ->  DashboardLayout (sidebar + navbar)
+        v
+  role branch: /admin/*  /lawyer/*  /staff/*  /client/*
+
+
+1. ONBOARDING (staff + admin)
+--------------------------------------------------------------------------------
+  LandingPage
+      |
+      |-- "Create an account" --------> /signup ------> POST /auth/register
+      |                                                   |  role = client
+      |                                                   |  + clients row
+      |                                                   v
+      |                                      client workspace (own file only)
+      |
+      |-- "Sign in" -------------------> /login --------> POST /auth/login
+                                                          |  { user, token,
+                                                          |    permissions }
+                                                          v
+                                                roleHome(role) redirect
+
+
+2. INTAKE  (the product's spine)
+--------------------------------------------------------------------------------
+  CLIENT                          STAFF                    LAWYER
+  ------                          -----                    ------
+  /client/suggestions
+    describe the problem
+    analyzeLegalProblem()  (browser pipeline, OpenRouter via /api/ai/chat)
+      |  AIProcessingModal shows real progress
+      v
+    LegalAnalysisPanel: caseType, urgency, services, next steps, key facts
+      |
+      |-- "Submit as a concern" --> POST /consultations ----+
+      |                                                     |
+      v                                                     v
+  /client/appointments                           /staff/consultations
+    book inside the lawyer's                        (PENDING inbox)
+    published slots                                    |
+      |                                                | triage
+      |                                                v
+      |                                        /lawyer/consultations
+      |                                          (consultations.review)
+      |                                                |
+      |                                     +----------+----------+
+      |                                     |                     |
+      |                                 approve                decline
+      |                                     |                     |
+      |                                     v                     v
+      |                            PATCH /consultations/:id/status
+      |                                     |
+      |                                     v
+      |                          notification -> client ("approved")
+      |                                     |
+      +--------------- staff books ---------+
+                     POST /appointments
+                     (availability + overlap checked, twice)
+                                     |
+                                     v
+                     notification -> client ("booked")
+
+
+3. MATTER LIFECYCLE (staff + lawyer + admin)
+--------------------------------------------------------------------------------
+  /staff/cases  or  /lawyer/cases  or  /admin/cases
+      |
+      |-- create --> POST /cases           case_number = JF-2026-1001
+      |                                    assignedLawyerId -> lawyers only
+      |-- assign --> PATCH /cases/:id/assign
+      |-- status --> PATCH /cases/:id/status   open -> pending -> active ->
+      |                                        discovery -> closed -> archived
+      |-- edit   --> PUT /cases/:id
+      |-- delete --> DELETE /cases/:id    refused while documents are attached
+      v
+  case detail: documents (008), appointments (006), consultations (005)
+
+
+4. DOCUMENTS + AI REVIEW
+--------------------------------------------------------------------------------
+  CLIENT uploads                 STAFF / LAWYER review
+  --------------                 ---------------------
+  /client/documents              /staff/documents | /lawyer/documents
+    "Upload document"              status -> received -> reviewing ->
+      POST /documents                      processed | rejected
+      (multipart -> storage)         PATCH /documents/:id/status
+      |                                |
+      v                                v
+   notification to the client     notification to the client
+                                       |
+                                       | "View AI classification"
+                                       v
+                              GET /documents/:id/analysis
+                              (nlp_results row: classification, urgency,
+                               summary, clauses, risks, model, latency)
+
+
+5. SCHEDULING
+--------------------------------------------------------------------------------
+  /lawyer/availability              /staff/calendar      /staff/appointments
+    weekly grid                        week grid            list + filters
+      |                                  |                    |
+    PUT /availability                  click a day           confirm / move /
+    (whole week, 30-min steps)         opens the booking      cancel / delete
+                                       modal               PATCH /appointments/:id/status
+                                          |                 PUT    /appointments/:id
+                                          v                 DELETE /appointments/:id
+                                       GET /appointments/slots?lawyerId=&date=
+                                          |
+                             free_slots() = weekly grid - booked slots
+                                          |
+                            POST /appointments (inside the grid, no overlap)
+                                          |
+                                          v
+                               notification -> client, audit -> activity_logs
+
+
+6. ADMINISTRATION
+--------------------------------------------------------------------------------
+  /admin/dashboard      GET /dashboard/stats, /dashboard/overview, /activity
+  /admin/clients        client book (open a file, optionally with a login)
+  /admin/team           POST /users, PATCH /users/:id/status, DELETE /users/:id
+  /admin/knowledge-base articles that ground the AI (keywords, services)
+  /admin/services       practice areas offered at intake
+  /admin/settings       profile, password, theme, notifications,
+                        roles & permissions   GET  /roles/permissions
+                                              PUT  /roles/:role/permissions
+
+
+7. AUTHORISATION - checked at three layers
+--------------------------------------------------------------------------------
+  browser     utils/rbac.ts   hides navigation and buttons (cosmetic)
+  flask       rbac.py         @permission_required on every route (authority)
+  postgres    RLS policies    scopes direct PostgREST reads to the same rules
+
+  A client is always scoped by the token: query-string ids are ignored.
+  The API never trusts the browser - hiding a control is not a control.
+
+
+8. FAILURE PATHS
+--------------------------------------------------------------------------------
+  no token / expired     401 -> /login (ProtectedRoute shows a loader first)
+  wrong role             403 -> the role's own home (roleHome)
+  unknown route          *   -> NotFound, which bounces signed-in users home
+  AI provider down       502 -> the intake panel shows a local-heuristic answer
+  slot already taken     409 -> "That slot is already booked for this lawyer."
+  upload too large       400 -> "Files must be smaller than 25 MB."
+================================================================================
+
 ╔══════════════════════════════════════════════════════════════════════════╗
 ║ JurisFlow — SYSTEM FLOWCHART                                             ║
 ║ Frontend only: React 19 + TypeScript + Vite · mock data from MSW         ║

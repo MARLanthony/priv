@@ -1,0 +1,45 @@
+/* ==========================================================================
+   JurisFlow — design system entry
+   --------------------------------------------------------------------------
+   Assembles the design tokens (`theme.css`) and the glass surfaces
+   (`glass.css`) and re-applies Tailwind's layers. `src/index.css` simply
+   forwards to this file so the app still has a single stylesheet entry point.
+   ========================================================================== */
+
+@import './theme.css';
+@import './glass.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base reset — kept after the Tailwind base layer so it wins, as before. */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--app-bg);
+  color: rgb(var(--contrast-rgb));
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--border-subtle); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
